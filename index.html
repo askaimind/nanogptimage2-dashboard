@@ -68,6 +68,9 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .meta-text{flex:1;min-width:0;}
 .vid-title{font-size:15px;font-weight:600;line-height:1.3;color:var(--text);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+/* When the card is expanded, reveal the FULL title (no clamp) so a cut-off
+   headline/title never ends abruptly — tapping the card shows the rest. */
+.card.open .vid-title{-webkit-line-clamp:unset;display:block;overflow:visible;}
 .vid-sub{font-size:13px;color:var(--text-dim);margin-top:4px;line-height:1.35;}
 .kebab{flex:none;color:var(--text-dim);font-size:20px;line-height:1;padding:2px 2px 0;}
 
