@@ -94,7 +94,14 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
   border-bottom:1px solid var(--line);padding:16px 14px 20px;}
 .card.open .detail{display:block;animation:slide .22s ease;}
 @keyframes slide{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
-.d-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.d-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;}
+.reroll-btn{margin-left:auto;font-size:12px;font-weight:700;padding:5px 11px;border-radius:7px;
+  border:1px solid rgba(139,180,255,.4);background:rgba(139,180,255,.10);color:#8bb4ff;cursor:pointer;
+  white-space:nowrap;}
+.reroll-btn:active{transform:scale(.96);}
+.reroll-btn:disabled{opacity:.6;cursor:default;}
+.reroll-btn.spinning{animation:rerollspin 1s linear infinite;}
+@keyframes rerollspin{from{filter:brightness(1)}50%{filter:brightness(1.5)}to{filter:brightness(1)}}
 .badge{font-size:12px;font-weight:600;padding:4px 9px;border-radius:7px;background:#272727;color:var(--text-dim);}
 .badge.score{color:var(--green);background:rgba(126,232,162,.12);}
 .badge.gate-pass{color:var(--green);background:rgba(126,232,162,.12);}
@@ -174,6 +181,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
 const ACT_URL  = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-action';
 const GEN_URL  = 'https://askai.app.n8n.cloud/webhook/nano-gen-thumb';
+const REROLL_URL = 'https://askai.app.n8n.cloud/webhook/nano-reroll';
 
 // 10 canonical categories (chip labels are short; match against full Channel Category)
 const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel'];
@@ -326,6 +334,8 @@ function card(s){
   el.querySelectorAll('.abtn').forEach(b=>{
     b.onclick=(ev)=>{ev.stopPropagation();sendAction(b.dataset.act,s,el);};
   });
+  const rb=el.querySelector('.reroll-btn');
+  if(rb) rb.onclick=(ev)=>{ev.stopPropagation();rerollStory(s,el);};
   return el;
 }
 
@@ -339,6 +349,7 @@ function detailHTML(s){
       <span class="badge ${gate?'gate-pass':'gate-fail'}">${gate?'GATE PASS':'GATE FAIL'}</span>
       <span class="badge">${esc(s.source||'')}</span>
       ${job}
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail & headline">⟳ Reroll</button>
     </div>
     ${block('Headline',(s.thumbnail_headline||s.thumbnail_text))}
     ${block('Elevator Pitch',s.elevator_pitch,'pitch')}
@@ -387,6 +398,35 @@ async function sendAction(action,story,el){
   }catch(_){}
   // if we're in a filtered view, re-render so the card moves to its bucket
   setTimeout(render,260);
+}
+
+// ---- reroll: AI re-reads the story, fixes category, regenerates thumbnail+headline.
+// If the category changes, it also rewrites pitch/caption/summary. Returns the row
+// to Discovery (Status=scored). New thumbnail lands async via the Kie callback. ----
+async function rerollStory(story,el){
+  const url=story.source_url;
+  if(!url){ toast('Reroll: missing source URL'); return; }
+  const btn=el.querySelector('.reroll-btn');
+  if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rereading…'; }
+  toast('Rerolling — AI re-reading story…');
+  try{
+    const res=await fetch(REROLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'reroll',source_url:url,story})});
+    const data=await res.json().catch(()=>({}));
+    const cat=data&&data.category?data.category:null;
+    const changed=data&&data.changed;
+    toast(cat?(changed?`Recategorized → ${shortCat(cat)}`:`Category held: ${shortCat(cat)}`):'Reroll submitted');
+    if(btn) btn.textContent = changed?'⟳ Rebuilt':'⟳ Refreshed';
+    // thumbnail re-renders async; poll the feed a few times so it appears
+    let tries=0;
+    const t=setInterval(async ()=>{ tries++; await load();
+      if(tries>=6){ clearInterval(t); if(btn){btn.classList.remove('spinning');btn.disabled=false;btn.textContent='⟳ Reroll';} }
+    },15000);
+  }catch(err){
+    console.error('reroll failed:',err);
+    toast('Reroll failed — retry');
+    if(btn){ btn.classList.remove('spinning'); btn.disabled=false; btn.textContent='⟳ Reroll'; }
+  }
 }
 
 function shortCat(c){
