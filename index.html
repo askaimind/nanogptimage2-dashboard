@@ -42,6 +42,11 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .refresh-btn:active{background:#3a3a3a;}
 .refresh-btn svg{width:18px;height:18px;}
 .refresh-btn.spinning svg{animation:spin .8s linear infinite;}
+.genthumb-btn{background:var(--chip);border:1px solid rgba(126,232,162,.4);color:var(--green);
+  height:34px;padding:0 12px;border-radius:17px;font-size:12px;font-weight:700;
+  display:flex;align-items:center;cursor:pointer;flex:none;margin-left:8px;white-space:nowrap;}
+.genthumb-btn:active{transform:scale(.97);}
+.genthumb-btn:disabled{opacity:.6;cursor:default;}
 .src-toggles label{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;}
 .src-toggles input{accent-color:var(--red);width:14px;height:14px;}
 
@@ -130,6 +135,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
+  <button class="genthumb-btn" id="genthumb-btn" title="Generate thumbnails for rows marked ADD" onclick="generateThumbnails()">Gen Thumbs</button>
   <div class="src-toggles">
     <label><input type="checkbox" class="src" value="reddit" checked>Reddit</label>
     <label><input type="checkbox" class="src" value="youtube" checked>YouTube</label>
@@ -163,6 +169,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <script>
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
 const ACT_URL  = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-action';
+const GEN_URL  = 'https://askai.app.n8n.cloud/webhook/nano-gen-thumb';
 
 // 10 canonical categories (chip labels are short; match against full Channel Category)
 const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel'];
@@ -397,6 +404,29 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','
 let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1600);}
+
+// Fire the regen webhook: processes every Discovery row with Thumbnail Request = ADD.
+// n8n submits each to Kie, stamps the Task ID, flips the cell to COMPLETE; the
+// existing resolve/callback pass fills Thumbnail URL when each render lands.
+async function generateThumbnails(){
+  const btn=document.getElementById('genthumb-btn');
+  const original=btn.textContent;
+  btn.disabled=true; btn.textContent='Submitting…';
+  try{
+    const res=await fetch(GEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'gen_thumbs'})});
+    const data=await res.json().catch(()=>({}));
+    const n=(data&&typeof data.submitted==='number')?data.submitted:null;
+    toast(n===0?'No ADD rows found':(n?`Submitted ${n} for render`:'Submitted'));
+    // Pull URLs in as they finish: refresh shortly, then again after Kie completes.
+    setTimeout(load,4000); setTimeout(load,15000);
+  }catch(err){
+    console.error('gen-thumb failed:',err);
+    toast('Gen Thumbs failed — retry');
+  }finally{
+    btn.textContent=original; btn.disabled=false;
+  }
+}
 
 // bottom nav + source toggles
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{activeView=t.dataset.view;render();});
