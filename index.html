@@ -142,7 +142,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v16</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v17</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -320,7 +320,7 @@ function render(){
 function card(s){
   const eff=effStatus(s);
   const el=document.createElement('div');
-  el.className='card'; el.dataset.eff=eff;
+  el.className='card'; el.dataset.eff=eff; el.dataset.url=s.source_url||'';
 
   const headline=(s.thumbnail_headline||s.thumbnail_text||'').trim();
   const thumbUrl=(s.thumbnail_url||'').trim();
@@ -359,7 +359,12 @@ function card(s){
     b.onclick=(ev)=>{ev.stopPropagation();sendAction(b.dataset.act,s,el);};
   });
   const rb=el.querySelector('.reroll-btn');
-  if(rb) rb.onclick=(ev)=>{ev.stopPropagation();rerollStory(s,el);};
+  if(rb){
+    rb.onclick=(ev)=>{ev.stopPropagation();rerollStory(s,el);};
+    // If a reroll for this row is still in flight, keep the button spinning across
+    // the load()/re-render cycles so the animation stays continuous until it lands.
+    if(rerollPollers[s.source_url]){ rb.disabled=true; rb.classList.add('spinning'); rb.textContent='⟳ Rerolling…'; }
+  }
   return el;
 }
 
@@ -425,13 +430,20 @@ async function sendAction(action,story,el){
 }
 
 // ---- reroll: AI re-reads the story, fixes category, regenerates thumbnail+headline.
-// If the category changes, it also rewrites pitch/caption/summary. Returns the row
-// to Discovery (Status=scored). New thumbnail lands async via the Kie callback. ----
+// If the category changes, it also rewrites pitch/caption/summary. The workflow sets
+// Status=scored, so the row returns to the TOP of Discovery (float-to-top sort) no
+// matter which tab it was sitting in. The spinner keeps going until THIS row's new
+// thumbnail actually lands (detected by the thumbnail URL changing), so the animation
+// is honest: it stops only when the work is genuinely done (or a hard timeout). ----
 async function rerollStory(story,el){
   const url=story.source_url;
   if(!url){ toast('Reroll: missing source URL'); return; }
   const btn=el.querySelector('.reroll-btn');
-  if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rereading…'; }
+  // Remember the thumbnail this row had BEFORE the reroll, so we can detect the new one.
+  const prevThumb=(story.thumbnail_url||'').trim();
+  const startSpin=()=>{ if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; } };
+  const stopSpin=(label)=>{ if(btn){ btn.classList.remove('spinning'); btn.disabled=false; btn.textContent=label||'⟳ Reroll'; } };
+  startSpin();
   toast('Rerolling — AI re-reading story…');
   try{
     const res=await fetch(REROLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -439,19 +451,44 @@ async function rerollStory(story,el){
     const data=await res.json().catch(()=>({}));
     const cat=data&&data.category?data.category:null;
     const changed=data&&data.changed;
-    toast(cat?(changed?`Recategorized → ${shortCat(cat)}`:`Category held: ${shortCat(cat)}`):'Reroll submitted');
-    if(btn) btn.textContent = changed?'⟳ Rebuilt':'⟳ Refreshed';
-    // thumbnail re-renders async; poll the feed a few times so it appears
-    let tries=0;
-    const t=setInterval(async ()=>{ tries++; await load();
-      if(tries>=6){ clearInterval(t); if(btn){btn.classList.remove('spinning');btn.disabled=false;btn.textContent='⟳ Reroll';} }
+    toast(cat?(changed?`Recategorized → ${shortCat(cat)} — rendering…`:`Category held: ${shortCat(cat)} — rendering…`):'Reroll submitted — rendering…');
+    // Jump to Discovery so the user is looking at where the rerolled card will appear.
+    activeView='discovery';
+    // Clear any local action on this row so nothing keeps it out of Discovery; the
+    // workflow's Status=scored is authoritative once the next load reads it.
+    if(localActs[url]){ delete localActs[url]; saveActs(); }
+
+    // Poll until THIS row's thumbnail actually changes (the real "done" signal).
+    // Keep spinning the whole time so you know it's still working. Hard cap at 5 min.
+    const startedAt=Date.now();
+    const MAX_MS=5*60*1000;
+    if(rerollPollers[url]) clearInterval(rerollPollers[url]);
+    rerollPollers[url]=setInterval(async ()=>{
+      await load();  // refreshes allStories + repaints; rerolled row floats to top
+      const fresh=allStories.find(s=>s.source_url===url);
+      const newThumb=fresh ? (fresh.thumbnail_url||'').trim() : '';
+      const landed = newThumb && newThumb!==prevThumb;       // a genuinely new image arrived
+      const timedOut = Date.now()-startedAt>MAX_MS;
+      if(landed || timedOut){
+        clearInterval(rerollPollers[url]); delete rerollPollers[url];
+        if(landed){ toast('Reroll ready ✓ — top of Discovery'); }
+        else      { toast('Reroll still rendering — tap ↻ to check'); }
+        // The button lives on the card element, which may have been re-rendered by load().
+        // Re-find it; if the card moved/re-rendered, the fresh card shows the new image already.
+        const liveBtn=document.querySelector(`.card[data-url="${cssEsc(url)}"] .reroll-btn`);
+        if(liveBtn){ liveBtn.classList.remove('spinning'); liveBtn.disabled=false; liveBtn.textContent='⟳ Reroll'; }
+        else stopSpin();
+      }
     },15000);
   }catch(err){
     console.error('reroll failed:',err);
     toast('Reroll failed — retry');
-    if(btn){ btn.classList.remove('spinning'); btn.disabled=false; btn.textContent='⟳ Reroll'; }
+    stopSpin();
   }
 }
+// Track active reroll pollers per row so re-renders don't spawn duplicates.
+const rerollPollers={};
+function cssEsc(s){ return String(s).replace(/["\\]/g,'\\$&'); }
 
 function shortCat(c){
   if(!c) return '';
