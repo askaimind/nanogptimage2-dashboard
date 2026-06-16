@@ -197,24 +197,41 @@ let activeCat='All';
 let activeView='discovery';
 const localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}'); // survives refresh
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
+// Rows you've actioned in THIS browser session. A fresh Deploy/Hold/Skip must win
+// over the sheet's COMPLETE→Discovery override, so you can always move a card out of
+// Discovery even right after it rendered. (Resets on reload, by design — after reload
+// the sheet is authoritative again.)
+const sessionActs = new Set();
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
 // A sheet status that means "the workflow deliberately returned this row to the
 // Discovery feed" — e.g. after a Gen Thumbs regen or a Reroll sets Status=scored.
-// When the sheet carries one of these, it must OVERRIDE and CLEAR any stale local
-// skip/hold, otherwise a row you skipped earlier stays pinned to Skipped forever
-// even though the pipeline put it back in Discovery.
 const SHEET_RETURNS_TO_DISCOVERY = new Set(['scored','ready_for_idea_generation']);
+// The SHEET IS THE CONTROL SURFACE. When you flag a row's Thumbnail Request = ADD
+// (old, decided, or rejected rows included) and it renders, the workflow flips that
+// cell to COMPLETE. A COMPLETE request + a baked thumbnail is a deliberate command:
+// "I asked for this, it's ready — show it to me in Discovery." That intent must
+// OVERRIDE any stale Deploy/Hold/Skip this browser remembers from a past session,
+// and the stale memory is purged so it can't re-bury the card on the next load.
+const requestCompleted = s =>
+  String(s.thumbnail_request||'').trim().toUpperCase()==='COMPLETE' &&
+  String(s.thumbnail_url||'').trim().length>0;
 const effStatus = s => {
-  // 1) Pipeline explicitly returned this row to Discovery → trust the sheet,
-  //    purge any stale local action so it can't re-bury the card on next load.
-  if(SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
+  // 0) A fresh action taken in THIS session always wins (live triage). Lets you move
+  //    a just-rendered card out of Discovery without the COMPLETE override pulling it back.
+  if(sessionActs.has(s.source_url)){
+    const a = localActs[s.source_url];
+    if(a) return a==='select'?'selected':a;
+  }
+  // 1) A completed thumbnail request OR an explicit scored/return status means the
+  //    sheet wants this row in Discovery. Sheet wins; clear any stale local action.
+  if(requestCompleted(s) || SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
     if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
     return 'scored';
   }
   // 2) Sheet carries a definitive cross-device action → it wins.
   if(SHEET_ACTIONS.has(s.status)) return s.status;
-  // 3) Otherwise fall back to this device's local action cache.
+  // 3) Otherwise fall back to this device's local action cache (live triage).
   const a = localActs[s.source_url];
   return a ? (a==='select'?'selected':a) : (s.status||'scored');
 };
@@ -403,6 +420,7 @@ function trimText(t){
 async function sendAction(action,story,el){
   const url=story.source_url;
   localActs[url]=action; saveActs();
+  sessionActs.add(url);   // your live triage now wins over the COMPLETE override
   el.dataset.eff = action==='select'?'selected':action;
   toast(action==='select'?'Deployed →':action==='hold'?'On hold':'Skipped');
   el.classList.remove('open');
