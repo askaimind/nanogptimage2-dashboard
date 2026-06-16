@@ -199,8 +199,22 @@ const localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}'); // surviv
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
+// A sheet status that means "the workflow deliberately returned this row to the
+// Discovery feed" — e.g. after a Gen Thumbs regen or a Reroll sets Status=scored.
+// When the sheet carries one of these, it must OVERRIDE and CLEAR any stale local
+// skip/hold, otherwise a row you skipped earlier stays pinned to Skipped forever
+// even though the pipeline put it back in Discovery.
+const SHEET_RETURNS_TO_DISCOVERY = new Set(['scored','ready_for_idea_generation']);
 const effStatus = s => {
+  // 1) Pipeline explicitly returned this row to Discovery → trust the sheet,
+  //    purge any stale local action so it can't re-bury the card on next load.
+  if(SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
+    if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
+    return 'scored';
+  }
+  // 2) Sheet carries a definitive cross-device action → it wins.
   if(SHEET_ACTIONS.has(s.status)) return s.status;
+  // 3) Otherwise fall back to this device's local action cache.
   const a = localActs[s.source_url];
   return a ? (a==='select'?'selected':a) : (s.status||'scored');
 };
