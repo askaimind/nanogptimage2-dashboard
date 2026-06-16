@@ -142,7 +142,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery</div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v16</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -195,37 +195,32 @@ const CAT_MATCH = {
 let allStories=[];
 let activeCat='All';
 let activeView='discovery';
-const localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}'); // survives refresh
+const localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}'); // optimistic bridge until sheet write lands
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
-// Rows you've actioned in THIS browser session. A fresh Deploy/Hold/Skip must win
-// over the sheet's COMPLETE→Discovery override, so you can always move a card out of
-// Discovery even right after it rendered. (Resets on reload, by design — after reload
-// the sheet is authoritative again.)
-const sessionActs = new Set();
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
-// The workflow sets Status='scored' on EXACTLY the rows you just re-requested via
-// Gen Thumbs or Reroll (Prep Write flips Status->scored on those rows only). That is
-// the precise "freshly returned to Discovery" signal — narrow and deliberate. A row
-// that has merely been COMPLETE for a long time is NOT touched here, so all your past
-// Deploy/Hold/Skip sorting is preserved. Only a fresh scored re-request overrides a
-// stale local action (and purges it so it can't re-bury the card next load).
+// The workflow sets Status='scored' on EXACTLY the rows you re-request via Gen Thumbs
+// or Reroll — the deliberate "return to Discovery" signal.
 const SHEET_RETURNS_TO_DISCOVERY = new Set(['scored','ready_for_idea_generation']);
+// THE SHEET IS THE SOURCE OF TRUTH. Your Deploy/Hold/Skip taps are written to the
+// sheet's Status column (Update Status node, matched by Source URL), so on the next
+// load the sheet already reflects them across every device. localStorage is kept only
+// as a brief optimistic bridge: it makes a card move the instant you tap, before the
+// sheet round-trip completes — but the sheet always wins once it has a definitive value.
 const effStatus = s => {
-  // 0) A fresh action taken in THIS session always wins (live triage) — lets you move
-  //    a just-returned card straight back out of Discovery if you change your mind.
-  if(sessionActs.has(s.source_url)){
-    const a = localActs[s.source_url];
-    if(a) return a==='select'?'selected':a;
+  // 1) Sheet has a definitive triage action → it wins. This is authoritative and
+  //    cross-device. Clear any local bridge entry; the sheet now carries the truth.
+  if(SHEET_ACTIONS.has(s.status)){
+    if(localActs[s.source_url]) { delete localActs[s.source_url]; saveActs(); }
+    return s.status;
   }
-  // 1) Fresh re-request → sheet says scored → force into Discovery, clear stale local.
+  // 2) Fresh re-request (scored/return) → Discovery. Clear any stale local action.
   if(SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
     if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
     return 'scored';
   }
-  // 2) Sheet carries a definitive cross-device action → it wins.
-  if(SHEET_ACTIONS.has(s.status)) return s.status;
-  // 3) Otherwise this device's local action cache decides (preserves past sorting).
+  // 3) No definitive sheet value yet → fall back to the optimistic local bridge
+  //    (covers the brief window between tapping and the sheet write landing).
   const a = localActs[s.source_url];
   return a ? (a==='select'?'selected':a) : (s.status||'scored');
 };
@@ -418,7 +413,6 @@ function trimText(t){
 async function sendAction(action,story,el){
   const url=story.source_url;
   localActs[url]=action; saveActs();
-  sessionActs.add(url);   // your live triage now wins over the COMPLETE override
   el.dataset.eff = action==='select'?'selected':action;
   toast(action==='select'?'Deployed →':action==='hold'?'On hold':'Skipped');
   el.classList.remove('open');
