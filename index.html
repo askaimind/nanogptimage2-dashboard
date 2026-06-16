@@ -204,34 +204,28 @@ function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localAc
 const sessionActs = new Set();
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
-// A sheet status that means "the workflow deliberately returned this row to the
-// Discovery feed" — e.g. after a Gen Thumbs regen or a Reroll sets Status=scored.
+// The workflow sets Status='scored' on EXACTLY the rows you just re-requested via
+// Gen Thumbs or Reroll (Prep Write flips Status->scored on those rows only). That is
+// the precise "freshly returned to Discovery" signal — narrow and deliberate. A row
+// that has merely been COMPLETE for a long time is NOT touched here, so all your past
+// Deploy/Hold/Skip sorting is preserved. Only a fresh scored re-request overrides a
+// stale local action (and purges it so it can't re-bury the card next load).
 const SHEET_RETURNS_TO_DISCOVERY = new Set(['scored','ready_for_idea_generation']);
-// The SHEET IS THE CONTROL SURFACE. When you flag a row's Thumbnail Request = ADD
-// (old, decided, or rejected rows included) and it renders, the workflow flips that
-// cell to COMPLETE. A COMPLETE request + a baked thumbnail is a deliberate command:
-// "I asked for this, it's ready — show it to me in Discovery." That intent must
-// OVERRIDE any stale Deploy/Hold/Skip this browser remembers from a past session,
-// and the stale memory is purged so it can't re-bury the card on the next load.
-const requestCompleted = s =>
-  String(s.thumbnail_request||'').trim().toUpperCase()==='COMPLETE' &&
-  String(s.thumbnail_url||'').trim().length>0;
 const effStatus = s => {
-  // 0) A fresh action taken in THIS session always wins (live triage). Lets you move
-  //    a just-rendered card out of Discovery without the COMPLETE override pulling it back.
+  // 0) A fresh action taken in THIS session always wins (live triage) — lets you move
+  //    a just-returned card straight back out of Discovery if you change your mind.
   if(sessionActs.has(s.source_url)){
     const a = localActs[s.source_url];
     if(a) return a==='select'?'selected':a;
   }
-  // 1) A completed thumbnail request OR an explicit scored/return status means the
-  //    sheet wants this row in Discovery. Sheet wins; clear any stale local action.
-  if(requestCompleted(s) || SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
+  // 1) Fresh re-request → sheet says scored → force into Discovery, clear stale local.
+  if(SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
     if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
     return 'scored';
   }
   // 2) Sheet carries a definitive cross-device action → it wins.
   if(SHEET_ACTIONS.has(s.status)) return s.status;
-  // 3) Otherwise fall back to this device's local action cache (live triage).
+  // 3) Otherwise this device's local action cache decides (preserves past sorting).
   const a = localActs[s.source_url];
   return a ? (a==='select'?'selected':a) : (s.status||'scored');
 };
@@ -312,7 +306,11 @@ function render(){
   if(activeView==='discovery') list=list.filter(s=>(s.thumbnail_url||'').trim());
   // Newest first. Prefer Date Added; fall back to sheet row order (later row = newer).
   const ts=s=>{const t=new Date(s.date_added||0).getTime();return isNaN(t)?0:t;};
-  list.sort((a,b)=> (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
+  // In Discovery, a FRESH re-request (sheet Status=scored) floats to the very top —
+  // so when you flag an OLD entry ADD and run Gen Thumbs, it lands where you'll see it
+  // immediately instead of sinking to the bottom by its original (old) date.
+  const fresh=s=> activeView==='discovery' && SHEET_RETURNS_TO_DISCOVERY.has(s.status) ? 1 : 0;
+  list.sort((a,b)=> (fresh(b)-fresh(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   // bottom-nav active state
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===activeView));
   if(!list.length){
