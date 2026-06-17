@@ -1,7 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+  // ---- Auto cache-bust: forces a fresh fetch after every deploy without manual ?v= ----
+  // Bump BUILD whenever index.html changes. On load, if the URL's ?v= doesn't match,
+  // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
+  // guard stops this from looping. Result: visitors always land on current code.
+  (function(){
+    var BUILD = '18';
+    try {
+      var url = new URL(window.location.href);
+      var v = url.searchParams.get('v');
+      if (v !== BUILD) {
+        if (sessionStorage.getItem('nano_reloaded_for') === BUILD) return; // already fresh this session
+        sessionStorage.setItem('nano_reloaded_for', BUILD);
+        url.searchParams.set('v', BUILD);
+        window.location.replace(url.toString());
+      }
+    } catch(e) { /* if URL API unavailable, fail open - page still works */ }
+  })();
+  </script>
 <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
 <style>
