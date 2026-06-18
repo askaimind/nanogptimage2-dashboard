@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '23';
+    var BUILD = '25';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -40,7 +40,7 @@
   --text-dim:#aaaaaa;
   --line:#272727;
   --red:#ff0000;
-  --green:#7EE8A2;
+  --green:#FFFFFF;
   --amber:#FFD166;
   --skip:#888;
   --pill:#000c;
@@ -68,15 +68,15 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .refresh-btn:active{background:#3a3a3a;}
 .refresh-btn svg{width:18px;height:18px;}
 .refresh-btn.spinning svg{animation:spin .8s linear infinite;}
-.genthumb-btn{background:var(--chip);border:1px solid rgba(126,232,162,.4);color:var(--green);
+.genthumb-btn{background:var(--chip);border:1px solid rgba(255,255,255,.4);color:var(--green);
   height:34px;padding:0 12px;border-radius:17px;font-size:12px;font-weight:700;
   display:flex;align-items:center;cursor:pointer;flex:none;margin-left:8px;white-space:nowrap;}
 .genthumb-btn:active{transform:scale(.97);}
 .genthumb-btn:disabled{opacity:.6;cursor:default;}
 .genthumb-btn.rendering{border-color:var(--green);color:var(--green);
   animation:genpulse 1.1s ease-in-out infinite;}
-@keyframes genpulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(126,232,162,.0);}
-  50%{opacity:.65;box-shadow:0 0 10px 1px rgba(126,232,162,.45);}}
+@keyframes genpulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(255,255,255,.0);}
+  50%{opacity:.65;box-shadow:0 0 10px 1px rgba(255,255,255,.45);}}
 .src-toggles label{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;white-space:nowrap;}
 .src-toggles input{accent-color:var(--red);width:14px;height:14px;}
 
@@ -126,11 +126,10 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
   white-space:nowrap;}
 .reroll-btn:active{transform:scale(.96);}
 .reroll-btn:disabled{opacity:.6;cursor:default;}
-.reroll-btn.spinning{animation:rerollspin 1s linear infinite;}
-@keyframes rerollspin{from{filter:brightness(1)}50%{filter:brightness(1.5)}to{filter:brightness(1)}}
+.reroll-btn.spinning{animation:btnFade 1.3s ease-in-out infinite;}
 .badge{font-size:12px;font-weight:600;padding:4px 9px;border-radius:7px;background:#272727;color:var(--text-dim);}
-.badge.score{color:var(--green);background:rgba(126,232,162,.12);}
-.badge.gate-pass{color:var(--green);background:rgba(126,232,162,.12);}
+.badge.score{color:var(--green);background:rgba(255,255,255,.12);}
+.badge.gate-pass{color:var(--green);background:rgba(255,255,255,.12);}
 .badge.gate-fail{color:#E57373;background:rgba(229,115,115,.12);}
 .d-block{margin-bottom:13px;}
 .d-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;}
@@ -140,7 +139,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .abtn{flex:1;padding:12px;border-radius:10px;border:1px solid;font-size:14px;font-weight:700;
   cursor:pointer;background:transparent;transition:transform .1s;}
 .abtn:active{transform:scale(.97);}
-.abtn-deploy{color:var(--green);border-color:rgba(126,232,162,.4);background:rgba(126,232,162,.10);}
+.abtn-deploy{color:var(--green);border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.10);}
 .abtn-hold{color:var(--amber);border-color:rgba(255,209,102,.4);background:rgba(255,209,102,.10);}
 .abtn-skip{color:#bbb;border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.04);}
 
@@ -179,28 +178,25 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .bf-step .bf-count{min-width:20px;text-align:center;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
 .bf-foot{display:flex;align-items:center;justify-content:space-between;margin-top:16px;gap:12px;}
 .bf-total{font-size:13px;color:var(--text-dim);}
-.bf-go{flex:0 0 auto;background:var(--green,#7ee8a2);color:#06120a;border:none;border-radius:10px;padding:11px 22px;font-size:15px;font-weight:800;cursor:pointer;}
+.bf-go{flex:0 0 auto;background:var(--green,#FFFFFF);color:#06120a;border:none;border-radius:10px;padding:11px 22px;font-size:15px;font-weight:800;cursor:pointer;}
 .bf-go:disabled{opacity:.5;cursor:default;}
 .bf-go.working{opacity:.85;}
-#backfill-btn.spinning{
-  animation:bfspin 0.9s linear infinite;
-  background:var(--green,#7ee8a2)!important;
-  color:#06120a!important;
-  border-color:var(--green,#7ee8a2)!important;
-  box-shadow:0 0 10px 1px rgba(126,232,162,.7);
-}
-@keyframes bfspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* Shared "currently working" indicator — a subtle opacity fade, used by ANY button
+   that needs to show it's busy (Backfill, Reroll, etc.) for a consistent feel. */
+.btn-working{animation:btnFade 1.3s ease-in-out infinite;}
+@keyframes btnFade{0%{opacity:1}50%{opacity:.45}100%{opacity:1}}
+#backfill-btn.spinning{animation:btnFade 1.3s ease-in-out infinite;}
 </style>
 </head>
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v23</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v25</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
   <button class="genthumb-btn" id="genthumb-btn" title="Generate thumbnails for rows marked ADD" onclick="generateThumbnails()">Gen Thumbs</button>
-  <button class="genthumb-btn" id="backfill-btn" title="Request stories per channel — pulls existing, generates the rest" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
+  <button class="genthumb-btn" id="backfill-btn" title="Request stories per channel — pulls existing, generates the rest" onclick="onBackfillTap()" style="margin-left:6px;">Backfill</button>
   <div class="src-toggles">
     <label><input type="checkbox" class="src" value="reddit" checked>Reddit</label>
     <label><input type="checkbox" class="src" value="youtube" checked>YouTube</label>
@@ -267,10 +263,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v23 so no ghost survives the
+// card's URL. Purge any localActs on load for build v25 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v23'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v23');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v25'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v25');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
@@ -541,8 +537,11 @@ async function rerollStory(story,el){
     // Keep spinning the whole time so you know it's still working. Hard cap at 5 min.
     const startedAt=Date.now();
     const MAX_MS=5*60*1000;
+    const MAX_POLLS=22;                    // hard cap: 22 × 15s ≈ 5.5 min ceiling
+    let rpolls=0;
     if(rerollPollers[url]) clearInterval(rerollPollers[url]);
     rerollPollers[url]=setInterval(async ()=>{
+      rpolls++;
       await load();  // refreshes allStories + repaints; rerolled row floats to top
       const fresh=allStories.find(s=>s.source_url===url);
       const newThumb  = fresh ? (fresh.thumbnail_url||'').trim() : '';
@@ -552,7 +551,7 @@ async function rerollStory(story,el){
       // means it's mid-render -> keep spinning. Same URL as before -> stale, keep spinning.
       const taskAdvanced = newTaskId && newTaskId!==prevTaskId;
       const landed = newThumb && newThumb!==prevThumb;       // url change is the hard signal
-      const timedOut = Date.now()-startedAt>MAX_MS;
+      const timedOut = (Date.now()-startedAt>MAX_MS) || (rpolls>=MAX_POLLS);
       if(landed || timedOut){
         clearInterval(rerollPollers[url]); delete rerollPollers[url];
         if(landed){ toast('Reroll ready ✓ — top of Discovery'); }
@@ -579,6 +578,17 @@ function cssEsc(s){ return String(s).replace(/["\\]/g,'\\$&'); }
 // Reuse the dashboard's canonical category list (minus 'All') and the short->full map.
 const BF_CHANNELS = CATS.filter(c=>c!=='All');
 const bfCounts = {};   // {shortLabel: n}
+// Backfill button tap: if it's currently working (spinning), a tap STOPS the wait
+// (manual escape hatch); otherwise it opens the request modal.
+function onBackfillTap(){
+  const b=document.getElementById('backfill-btn');
+  if(b && b.classList.contains('spinning')){
+    stopBackfillSpin();
+    toast('Stopped watching — cards still finish in the background');
+    return;
+  }
+  openBackfill();
+}
 function openBackfill(){
   BF_CHANNELS.forEach(c=>{ if(bfCounts[c]==null) bfCounts[c]=0; });
   const list=document.getElementById('bf-list');
@@ -623,13 +633,17 @@ async function submitBackfill(){
   // unmistakable feedback the moment you tap Request — and scroll it into view since
   // the appbar scrolls horizontally and the button may be off-screen on Discovery.
   if(bfBtn){
-    bfBtn.classList.add('spinning'); bfBtn.disabled=true;
+    bfBtn.classList.add('spinning');   // stays enabled so a tap can stop the wait
     try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){}
   }
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
   toast('Backfilling — '+summary+'…');
-  // Snapshot how many Discovery cards exist NOW so we can detect new arrivals.
-  const beforeCount = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
+  // Snapshot the URLs of any backfill-origin cards already present, so we can detect
+  // the SPECIFIC new ones that arrive (precise, not a fragile total-count delta).
+  const beforeBackfillUrls = new Set(
+    allStories.filter(s=>String(s.source_url||'').startsWith('backfill://'))
+              .map(s=>s.source_url)
+  );
   try{
     // The v2 backend responds IMMEDIATELY (after Pull+Plan) with the plan counts;
     // generation continues in the background. So this fetch returns in ~2s, NOT after
@@ -639,7 +653,6 @@ async function submitBackfill(){
     const data=await res.json().catch(()=>({}));
     const pulled=(data&&data.pulled)||0;
     const generating=(data&&data.generating)||0;   // v2 field name
-    const expectedNew = pulled + generating;        // total cards that should appear
     closeBackfill();
     activeView='discovery';                          // look at where cards will land
     toast(`Backfill accepted — ${pulled} pulled, ${generating} generating…`);
@@ -650,29 +663,47 @@ async function submitBackfill(){
     if(bfBtn){ try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){} }
     const startedAt=Date.now();
     const MAX_MS=8*60*1000;                          // generation can take a few minutes
+    const MAX_POLLS=32;                               // hard cap: 32 × 15s = 8 min ceiling
+    let polls=0;
     if(window._bfPoller) clearInterval(window._bfPoller);
     await load();                                    // immediate refresh (surfaces pulls)
     window._bfPoller=setInterval(async ()=>{
+      polls++;
       await load();
-      const nowCount=allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
-      const arrived=Math.max(0, nowCount - beforeCount);
-      const done = expectedNew>0 ? (arrived>=expectedNew) : true;
-      const timedOut = Date.now()-startedAt>MAX_MS;
+      // Count NEW backfill-origin cards that have a thumbnail and weren't here before.
+      const newReady = allStories.filter(s=>
+        String(s.source_url||'').startsWith('backfill://') &&
+        !beforeBackfillUrls.has(s.source_url) &&
+        (s.thumbnail_url||'').trim()
+      ).length;
+      // "Done" when the generated cards have rendered. (Pulls land immediately on the
+      // first load and need no thumbnail wait.) If nothing was to be generated, we're
+      // done as soon as we've refreshed once.
+      const done = generating>0 ? (newReady>=generating) : true;
+      // TWO independent stops so the poll can never outlive the work: elapsed time AND
+      // a hard attempt cap (belt-and-suspenders even if detection somehow never fires).
+      const timedOut = (Date.now()-startedAt>MAX_MS) || (polls>=MAX_POLLS);
       if(done || timedOut){
-        clearInterval(window._bfPoller); window._bfPoller=null;
-        if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.disabled=false; }
-        if(done){ toast(`Backfill ready ✓ — ${arrived} new at top of Discovery`); }
+        stopBackfillSpin();
+        if(done){ toast(`Backfill ready ✓ — ${pulled+newReady} new at top of Discovery`); }
         else    { toast('Backfill still rendering — tap ↻ to check'); }
       }
     }, 15000);
   }catch(err){
     console.error('backfill failed:',err);
     toast('Backfill request failed — retry');
-    if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.disabled=false; }
+    stopBackfillSpin();
   }finally{
     go.disabled=false; go.classList.remove('working'); go.textContent='Request';
     bfUpdateTotal();
   }
+}
+// Stop the Backfill button's working-fade and clear the poller. Also the manual
+// escape hatch: tapping the spinning Backfill button calls this to cancel the wait.
+function stopBackfillSpin(){
+  if(window._bfPoller){ clearInterval(window._bfPoller); window._bfPoller=null; }
+  const b=document.getElementById('backfill-btn');
+  if(b){ b.classList.remove('spinning'); b.disabled=false; }
 }
 
 function shortCat(c){
@@ -732,8 +763,11 @@ async function generateThumbnails(){
 
     const startedAt=Date.now();
     const MAX_MS=4*60*1000;                   // give Kie up to 4 min for the batch
+    const MAX_POLLS=18;                        // hard cap: 18 × 15s ≈ 4.5 min ceiling
+    let gpolls=0;
     clearInterval(genPollTimer);
     genPollTimer=setInterval(async ()=>{
+      gpolls++;
       await load();                           // repaints feed; new thumbs appear here
       const nowReady=readyThumbCount();
       const gained=nowReady-baseline;
@@ -743,7 +777,7 @@ async function generateThumbnails(){
         toast(`${arrived} of ${expected} ready`);
         btn.textContent = arrived>=expected ? 'Done ✓' : `Rendering ${expected-arrived}…`;
       }
-      const timedOut=Date.now()-startedAt>MAX_MS;
+      const timedOut=(Date.now()-startedAt>MAX_MS) || (gpolls>=MAX_POLLS);
       if(arrived>=expected || timedOut){
         clearInterval(genPollTimer); genPollTimer=null;
         btn.classList.remove('rendering');
