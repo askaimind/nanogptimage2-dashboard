@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '21';
+    var BUILD = '22';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -182,12 +182,13 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .bf-go{flex:0 0 auto;background:var(--green,#7ee8a2);color:#06120a;border:none;border-radius:10px;padding:11px 22px;font-size:15px;font-weight:800;cursor:pointer;}
 .bf-go:disabled{opacity:.5;cursor:default;}
 .bf-go.working{opacity:.85;}
+#backfill-btn.spinning{animation:rerollspin 1s linear infinite;}
 </style>
 </head>
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v21</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v22</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -259,10 +260,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v21 so no ghost survives the
+// card's URL. Purge any localActs on load for build v22 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v21'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v21');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v22'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v22');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
@@ -609,26 +610,51 @@ async function submitBackfill(){
   });
   if(!requests.length){ return; }
   const go=document.getElementById('bf-go');
+  const bfBtn=document.getElementById('backfill-btn');   // the appbar button that will spin
   go.disabled=true; go.classList.add('working'); go.textContent='Working…';
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
   toast('Backfilling — '+summary+'…');
+  // Snapshot how many Discovery cards exist NOW so we can detect new arrivals.
+  const beforeCount = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
   try{
+    // The v2 backend responds IMMEDIATELY (after Pull+Plan) with the plan counts;
+    // generation continues in the background. So this fetch returns in ~2s, NOT after
+    // the slow thumbnail render — no more false "failed".
     const res=await fetch(BACKFILL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({requests})});
     const data=await res.json().catch(()=>({}));
-    const pulled=(data&&data.pulled)||0, generated=(data&&data.generated)||0;
+    const pulled=(data&&data.pulled)||0;
+    const generating=(data&&data.generating)||0;   // v2 field name
+    const expectedNew = pulled + generating;        // total cards that should appear
     closeBackfill();
-    // Switch to Discovery so the freshly pulled/generated cards are in view.
-    activeView='discovery';
-    toast(`Backfill done — ${pulled} pulled, ${generated} generating ✓`);
-    // Generated thumbnails arrive via Kie callback shortly; refresh a few times so
-    // their images appear as they land, the same way Gen Thumbs surfaces results.
-    let ticks=0;
-    const poll=setInterval(async ()=>{ ticks++; await load(); if(ticks>=8) clearInterval(poll); }, 15000);
-    await load();
+    activeView='discovery';                          // look at where cards will land
+    toast(`Backfill accepted — ${pulled} pulled, ${generating} generating…`);
+
+    // Spin the Backfill button (honest progress) and poll Discovery until the expected
+    // number of NEW cards have landed, or a hard timeout. Pulls appear on the next load;
+    // generated cards appear as their Kie thumbnails arrive over the following minutes.
+    if(bfBtn){ bfBtn.classList.add('spinning'); bfBtn.disabled=true; }
+    const startedAt=Date.now();
+    const MAX_MS=8*60*1000;                          // generation can take a few minutes
+    if(window._bfPoller) clearInterval(window._bfPoller);
+    await load();                                    // immediate refresh (surfaces pulls)
+    window._bfPoller=setInterval(async ()=>{
+      await load();
+      const nowCount=allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
+      const arrived=Math.max(0, nowCount - beforeCount);
+      const done = expectedNew>0 ? (arrived>=expectedNew) : true;
+      const timedOut = Date.now()-startedAt>MAX_MS;
+      if(done || timedOut){
+        clearInterval(window._bfPoller); window._bfPoller=null;
+        if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.disabled=false; }
+        if(done){ toast(`Backfill ready ✓ — ${arrived} new at top of Discovery`); }
+        else    { toast('Backfill still rendering — tap ↻ to check'); }
+      }
+    }, 15000);
   }catch(err){
     console.error('backfill failed:',err);
-    toast('Backfill failed — retry');
+    toast('Backfill request failed — retry');
+    if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.disabled=false; }
   }finally{
     go.disabled=false; go.classList.remove('working'); go.textContent='Request';
     bfUpdateTotal();
