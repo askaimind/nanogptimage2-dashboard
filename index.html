@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '22';
+    var BUILD = '23';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -182,13 +182,20 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .bf-go{flex:0 0 auto;background:var(--green,#7ee8a2);color:#06120a;border:none;border-radius:10px;padding:11px 22px;font-size:15px;font-weight:800;cursor:pointer;}
 .bf-go:disabled{opacity:.5;cursor:default;}
 .bf-go.working{opacity:.85;}
-#backfill-btn.spinning{animation:rerollspin 1s linear infinite;}
+#backfill-btn.spinning{
+  animation:bfspin 0.9s linear infinite;
+  background:var(--green,#7ee8a2)!important;
+  color:#06120a!important;
+  border-color:var(--green,#7ee8a2)!important;
+  box-shadow:0 0 10px 1px rgba(126,232,162,.7);
+}
+@keyframes bfspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v22</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v23</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -260,10 +267,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v22 so no ghost survives the
+// card's URL. Purge any localActs on load for build v23 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v22'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v22');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v23'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v23');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
@@ -612,6 +619,13 @@ async function submitBackfill(){
   const go=document.getElementById('bf-go');
   const bfBtn=document.getElementById('backfill-btn');   // the appbar button that will spin
   go.disabled=true; go.classList.add('working'); go.textContent='Working…';
+  // Start the spin IMMEDIATELY (before the network round-trip) so there's instant,
+  // unmistakable feedback the moment you tap Request — and scroll it into view since
+  // the appbar scrolls horizontally and the button may be off-screen on Discovery.
+  if(bfBtn){
+    bfBtn.classList.add('spinning'); bfBtn.disabled=true;
+    try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){}
+  }
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
   toast('Backfilling — '+summary+'…');
   // Snapshot how many Discovery cards exist NOW so we can detect new arrivals.
@@ -630,10 +644,10 @@ async function submitBackfill(){
     activeView='discovery';                          // look at where cards will land
     toast(`Backfill accepted — ${pulled} pulled, ${generating} generating…`);
 
-    // Spin the Backfill button (honest progress) and poll Discovery until the expected
-    // number of NEW cards have landed, or a hard timeout. Pulls appear on the next load;
-    // generated cards appear as their Kie thumbnails arrive over the following minutes.
-    if(bfBtn){ bfBtn.classList.add('spinning'); bfBtn.disabled=true; }
+    // Spinner already started on submit; poll Discovery until the expected number of
+    // NEW cards have landed, or a hard timeout. Pulls appear on the next load; generated
+    // cards appear as their Kie thumbnails arrive over the following minutes.
+    if(bfBtn){ try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){} }
     const startedAt=Date.now();
     const MAX_MS=8*60*1000;                          // generation can take a few minutes
     if(window._bfPoller) clearInterval(window._bfPoller);
