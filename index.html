@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '18';
+    var BUILD = '19';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -164,7 +164,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v18</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v19</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -218,10 +218,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v18 so no ghost survives the
+// card's URL. Purge any localActs on load for build v19 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v18'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v18');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v19'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v19');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
@@ -465,8 +465,12 @@ async function rerollStory(story,el){
   const url=story.source_url;
   if(!url){ toast('Reroll: missing source URL'); return; }
   const btn=el.querySelector('.reroll-btn');
-  // Remember the thumbnail this row had BEFORE the reroll, so we can detect the new one.
+  // Remember the thumbnail AND task id this row had BEFORE the reroll, so we can detect
+  // the genuinely-new render. Reroll writes a NEW Thumbnail Task ID immediately and
+  // blanks the URL; Kie's callback later fills the new URL. "Landed" = a fresh non-empty
+  // URL has arrived that differs from the old one (task id tracked as corroboration).
   const prevThumb=(story.thumbnail_url||'').trim();
+  const prevTaskId=(story.thumbnail_task_id||'').trim();
   const startSpin=()=>{ if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; } };
   const stopSpin=(label)=>{ if(btn){ btn.classList.remove('spinning'); btn.disabled=false; btn.textContent=label||'⟳ Reroll'; } };
   startSpin();
@@ -492,8 +496,13 @@ async function rerollStory(story,el){
     rerollPollers[url]=setInterval(async ()=>{
       await load();  // refreshes allStories + repaints; rerolled row floats to top
       const fresh=allStories.find(s=>s.source_url===url);
-      const newThumb=fresh ? (fresh.thumbnail_url||'').trim() : '';
-      const landed = newThumb && newThumb!==prevThumb;       // a genuinely new image arrived
+      const newThumb  = fresh ? (fresh.thumbnail_url||'').trim() : '';
+      const newTaskId = fresh ? (fresh.thumbnail_task_id||'').trim() : '';
+      // Honest "done": a fresh, non-empty thumbnail URL has landed that differs from the
+      // old one (proves Kie's callback finished). A new task id with a still-blank URL
+      // means it's mid-render -> keep spinning. Same URL as before -> stale, keep spinning.
+      const taskAdvanced = newTaskId && newTaskId!==prevTaskId;
+      const landed = newThumb && newThumb!==prevThumb;       // url change is the hard signal
       const timedOut = Date.now()-startedAt>MAX_MS;
       if(landed || timedOut){
         clearInterval(rerollPollers[url]); delete rerollPollers[url];
