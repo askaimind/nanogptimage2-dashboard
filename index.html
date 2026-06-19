@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '26';
+    var BUILD = '27';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,6 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
+<link rel="icon" type="image/png" href="favicon.png?v=27">
+<link rel="apple-touch-icon" href="favicon.png?v=27">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -191,7 +193,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v26</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v27</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -263,10 +265,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v26 so no ghost survives the
+// card's URL. Purge any localActs on load for build v27 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v26'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v26');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v27'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v27');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
