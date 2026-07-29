@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '27';
+    var BUILD = '28';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=27">
-<link rel="apple-touch-icon" href="favicon.png?v=27">
+<link rel="icon" type="image/png" href="favicon.png?v=28">
+<link rel="apple-touch-icon" href="favicon.png?v=28">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -70,6 +70,11 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .refresh-btn:active{background:#3a3a3a;}
 .refresh-btn svg{width:18px;height:18px;}
 .refresh-btn.spinning svg{animation:spin .8s linear infinite;}
+/* v28: while the pipeline is still working, the arrow keeps spinning AND gets a soft
+   halo so a long wait reads as "still going", not "stuck". Tap again to stop watching. */
+.refresh-btn.watching{box-shadow:0 0 0 0 rgba(255,255,255,.35);animation:watchPulse 1.6s ease-in-out infinite;}
+@keyframes watchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.30);}
+  50%{box-shadow:0 0 11px 2px rgba(255,255,255,.42);}}
 .genthumb-btn{background:var(--chip);border:1px solid rgba(255,255,255,.4);color:var(--green);
   height:34px;padding:0 12px;border-radius:17px;font-size:12px;font-weight:700;
   display:flex;align-items:center;cursor:pointer;flex:none;margin-left:8px;white-space:nowrap;}
@@ -193,8 +198,8 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v27</span></div>
-  <button class="refresh-btn" id="refresh-btn" title="Refresh feed" onclick="load()">
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v28</span></div>
+  <button class="refresh-btn" id="refresh-btn" title="Refresh — keeps spinning until new thumbnails land; tap again to stop watching" onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
   <button class="genthumb-btn" id="genthumb-btn" title="Generate thumbnails for rows marked ADD" onclick="generateThumbnails()">Gen Thumbs</button>
@@ -265,10 +270,10 @@ let allStories=[];
 let activeCat='All';
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
-// card's URL. Purge any localActs on load for build v27 so no ghost survives the
+// card's URL. Purge any localActs on load for build v28 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v27'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v27');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v28'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v28');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
@@ -298,8 +303,32 @@ const effStatus = s => {
   return a ? (a==='select'?'selected':a) : (s.status||'scored');
 };
 
+// ── v28: DISPLAY-SIDE SOURCE-SUFFIX STRIP ────────────────────────────────
+// Google News appends " - Publisher" (often " - Outlet | City") to every headline.
+// Collect and Score v19.1 now strips this at ingestion, but every row written
+// BEFORE v19.1 still carries the publisher in its stored Title. Showing an outlet
+// name on our card reads as if we're reproducing that outlet's article or are
+// affiliated with them — we're not; these are original stories merely inspired by
+// a trending topic. So we also strip on display, which cleans legacy rows instantly
+// and needs no sheet migration. Conservative: only trailing chunks that look like a
+// publisher (short, few words, no sentence-ending punctuation) are removed, so real
+// subtitles like "…: What We Know" survive untouched.
+function stripSrcDisplay(t){
+  let x = String(t == null ? '' : t).trim();
+  for(let p=0; p<2; p++){
+    const m = x.match(/^(.*\S)\s+[-\u2013\u2014|]\s+([^-\u2013\u2014|]{2,45})$/);
+    if(m && !/[.!?:;]$/.test(m[2]) && m[2].split(/\s+/).filter(Boolean).length <= 6){
+      x = m[1].trim();
+    } else break;
+  }
+  return x || String(t == null ? '' : t).trim();
+}
+
 // ---- data fetch (unchanged contract) ----
-async function load(){
+// opts.keepSpin: leave the refresh arrow spinning (used by the v28 watcher, which owns
+// the spin state for the whole duration of a pipeline run rather than one HTTP call).
+async function load(opts){
+  const keepSpin = !!(opts && opts.keepSpin) || !!refreshWatcher;
   const rb=document.getElementById('refresh-btn');
   if(rb) rb.classList.add('spinning');
   try{
@@ -310,12 +339,80 @@ async function load(){
   }catch(e){
     document.getElementById('feed').innerHTML =
       '<div class="empty">Couldn\'t reach the pipeline.<br>'+e.message+'</div>';
-    if(rb) rb.classList.remove('spinning');
+    if(rb && !keepSpin) rb.classList.remove('spinning');
     return;
   }
-  if(rb) rb.classList.remove('spinning');
+  if(rb && !keepSpin) rb.classList.remove('spinning');
   renderChips();
   render();
+}
+
+// ── v28: CIRCLE-ARROW WATCHER ────────────────────────────────────────────
+// The problem this fixes: pressing the arrow POSTs nano-dashboard-read, which returns
+// in ~1s while Discovery Refresh + Collect & Score + image generation keep running for
+// MINUTES. The old code tied the spin to that one HTTP call, so the arrow stopped almost
+// immediately and new thumbnails never appeared until a manual browser refresh.
+// Now the arrow owns a polling watcher: it spins (with a halo) and re-reads the feed
+// every 15s, repainting automatically as thumbnails land, and stops only when the run
+// has genuinely gone quiet — new thumbnails arrived and then two consecutive checks
+// brought nothing further — or on a hard timeout. Tapping the spinning arrow stops
+// watching (the run itself continues server-side), matching the Backfill button's
+// escape-hatch behaviour.
+let refreshWatcher=null;
+const REFRESH_POLL_MS = 15000;
+const REFRESH_MAX_MS  = 12*60*1000;   // Discovery Refresh ~3.5min + renders
+const REFRESH_MAX_POLLS = 48;         // belt-and-suspenders ceiling
+
+function readyThumbUrls(){
+  return new Set(allStories.filter(s=>(s.thumbnail_url||'').trim()).map(s=>s.source_url));
+}
+function stopRefreshWatch(msg){
+  if(refreshWatcher){ clearInterval(refreshWatcher); refreshWatcher=null; }
+  const rb=document.getElementById('refresh-btn');
+  if(rb){ rb.classList.remove('spinning','watching'); }
+  if(msg) toast(msg);
+}
+async function refreshTap(){
+  const rb=document.getElementById('refresh-btn');
+  // Second tap while watching = stop waiting (work continues in the background).
+  if(refreshWatcher){
+    stopRefreshWatch('Stopped watching — the run continues in the background');
+    return;
+  }
+  if(rb){ rb.classList.add('spinning','watching'); }
+  toast('Refreshing — collecting, scoring, rendering…');
+
+  // Snapshot which rows ALREADY have a thumbnail, so "new" is precise per-row rather
+  // than a fragile total-count delta (rows can also leave the Discovery view).
+  const before = readyThumbUrls();
+  await load({keepSpin:true});
+
+  const startedAt=Date.now();
+  let polls=0, lastNew=0, quietRounds=0;
+
+  refreshWatcher=setInterval(async ()=>{
+    polls++;
+    await load({keepSpin:true});   // repaints the feed → thumbnails appear on their own
+    const newOnes = allStories.filter(s =>
+      (s.thumbnail_url||'').trim() && !before.has(s.source_url)
+    ).length;
+
+    if(newOnes>lastNew){
+      lastNew=newOnes; quietRounds=0;
+      toast(newOnes+' new thumbnail'+(newOnes===1?'':'s')+' in');
+    } else if(lastNew>0){
+      quietRounds++;               // arrivals have stopped — the batch is finishing
+    }
+
+    const timedOut = (Date.now()-startedAt > REFRESH_MAX_MS) || (polls >= REFRESH_MAX_POLLS);
+    // Done = something landed AND two consecutive quiet checks (~30s of no arrivals).
+    if((lastNew>0 && quietRounds>=2) || timedOut){
+      stopRefreshWatch(
+        lastNew>0 ? `Ready ✓ — ${lastNew} new thumbnail${lastNew===1?'':'s'}`
+                  : 'No new thumbnails yet — tap ↻ to check again'
+      );
+    }
+  }, REFRESH_POLL_MS);
 }
 
 function renderChips(){
@@ -418,7 +515,7 @@ function card(s){
     <div class="meta">
       <div class="avatar">${initials(chName)}</div>
       <div class="meta-text">
-        <div class="vid-title">${esc(s.title||'Untitled')}</div>
+        <div class="vid-title">${esc(stripSrcDisplay(s.title)||'Untitled')}</div>
         <div class="vid-sub">${esc(subline)}</div>
       </div>
       <div class="kebab">⋮</div>
@@ -514,8 +611,8 @@ async function rerollStory(story,el){
   const btn=el.querySelector('.reroll-btn');
   // Remember the thumbnail AND task id this row had BEFORE the reroll, so we can detect
   // the genuinely-new render. Reroll writes a NEW Thumbnail Task ID immediately and
-  // blanks the URL; Kie's callback later fills the new URL. "Landed" = a fresh non-empty
-  // URL has arrived that differs from the old one (task id tracked as corroboration).
+  // blanks the URL; the render callback later fills the new URL. "Landed" = a fresh
+  // non-empty URL has arrived that differs from the old one.
   const prevThumb=(story.thumbnail_url||'').trim();
   const prevTaskId=(story.thumbnail_task_id||'').trim();
   const startSpin=()=>{ if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; } };
@@ -549,7 +646,7 @@ async function rerollStory(story,el){
       const newThumb  = fresh ? (fresh.thumbnail_url||'').trim() : '';
       const newTaskId = fresh ? (fresh.thumbnail_task_id||'').trim() : '';
       // Honest "done": a fresh, non-empty thumbnail URL has landed that differs from the
-      // old one (proves Kie's callback finished). A new task id with a still-blank URL
+      // old one (proves the render finished). A new task id with a still-blank URL
       // means it's mid-render -> keep spinning. Same URL as before -> stale, keep spinning.
       const taskAdvanced = newTaskId && newTaskId!==prevTaskId;
       const landed = newThumb && newThumb!==prevThumb;       // url change is the hard signal
@@ -661,7 +758,7 @@ async function submitBackfill(){
 
     // Spinner already started on submit; poll Discovery until the expected number of
     // NEW cards have landed, or a hard timeout. Pulls appear on the next load; generated
-    // cards appear as their Kie thumbnails arrive over the following minutes.
+    // cards appear as their renders arrive over the following minutes.
     if(bfBtn){ try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){} }
     const startedAt=Date.now();
     const MAX_MS=8*60*1000;                          // generation can take a few minutes
@@ -729,10 +826,9 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200);}
 
 // Fire the regen webhook: processes every Discovery row with Thumbnail Request = ADD.
-// n8n submits each row to Kie (renders take ~30-90s each), stamps the Task ID, flips
-// the cell to COMPLETE; the resolve/callback pass fills Thumbnail URL when each lands.
-// Because rendering is async, we poll the feed until the new thumbnails arrive and
-// keep the button visibly "rendering" so you know more are still coming.
+// n8n generates each row's image (OpenAI, ~10-40s each), uploads straight to R2 and
+// writes Thumbnail URL. Because rendering is async, we poll the feed until the new
+// thumbnails arrive and keep the button visibly "rendering" so you know more are coming.
 let genPollTimer=null;
 function readyThumbCount(){
   return allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
@@ -764,8 +860,8 @@ async function generateThumbnails(){
     btn.textContent=`Rendering ${expected}…`;
 
     const startedAt=Date.now();
-    const MAX_MS=4*60*1000;                   // give Kie up to 4 min for the batch
-    const MAX_POLLS=18;                        // hard cap: 18 × 15s ≈ 4.5 min ceiling
+    const MAX_MS=6*60*1000;                   // allow the batch up to 6 min
+    const MAX_POLLS=26;                        // hard cap: 26 × 15s ≈ 6.5 min ceiling
     let gpolls=0;
     clearInterval(genPollTimer);
     genPollTimer=setInterval(async ()=>{
