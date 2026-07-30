@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '28';
+    var BUILD = '30';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=28">
-<link rel="apple-touch-icon" href="favicon.png?v=28">
+<link rel="icon" type="image/png" href="favicon.png?v=30">
+<link rel="apple-touch-icon" href="favicon.png?v=30">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -198,7 +198,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v28</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v30</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Refresh — keeps spinning until new thumbnails land; tap again to stop watching" onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -252,6 +252,19 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 
 <script>
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
+// ── READ vs POLL — the single most important rule in this file ────────────
+// READ_URL has a SIDE EFFECT: the workflow wires nano-dashboard-read straight into
+// Kick Discovery Refresh, so every unflagged call launches a full scrape + image run.
+// ANY repeated/background read MUST pass {poll:true}. Only a deliberate user action
+// that is MEANT to start the pipeline may call load() unflagged. v29 fixed this for
+// the refresh watcher but missed the Gen Thumbs, Backfill and Reroll pollers, which
+// kept firing a pipeline run every 15s — n8n showed 7/20 concurrent executions from a
+// single button press. v30 flags all of them.
+// v29: a POLL is a pure read. Without ?poll=1 the read webhook ALSO kicks Discovery
+// Refresh, so the 15s watcher was launching a whole scrape+render run every poll and
+// saturating n8n until the webhook stopped answering. The workflow's "Poll Only?" IF
+// node routes ?poll=1 straight to the sheet read with no side effects.
+const POLL_URL = READ_URL + '?poll=1';
 const ACT_URL  = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-action';
 const GEN_URL  = 'https://askai.app.n8n.cloud/webhook/nano-gen-thumb';
 const REROLL_URL = 'https://askai.app.n8n.cloud/webhook/nano-reroll';
@@ -268,6 +281,9 @@ const CAT_MATCH = {
 
 let allStories=[];
 let activeCat='All';
+// Consecutive failed reads. The watcher gives up only after several in a row, so one
+// blip (n8n busy, phone changing networks) never ends the watch or clears the feed.
+let loadFailures=0;
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
 // card's URL. Purge any localActs on load for build v28 so no ghost survives the
@@ -329,16 +345,26 @@ function stripSrcDisplay(t){
 // the spin state for the whole duration of a pipeline run rather than one HTTP call).
 async function load(opts){
   const keepSpin = !!(opts && opts.keepSpin) || !!refreshWatcher;
+  const isPoll   = !!(opts && opts.poll);
   const rb=document.getElementById('refresh-btn');
   if(rb) rb.classList.add('spinning');
   try{
-    const res = await fetch(READ_URL);
+    const res = await fetch(isPoll ? POLL_URL : READ_URL);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     allStories = data.stories || [];
+    loadFailures = 0;
   }catch(e){
-    document.getElementById('feed').innerHTML =
-      '<div class="empty">Couldn\'t reach the pipeline.<br>'+e.message+'</div>';
+    loadFailures++;
+    // v29: a transient failure must NOT wipe the feed. Cards already on screen stay
+    // exactly where they are; we just note it and let the next poll recover. Only a
+    // COLD start with nothing rendered shows the full-screen error.
+    if(!allStories.length){
+      document.getElementById('feed').innerHTML =
+        '<div class="empty">Couldn\'t reach the pipeline.<br>'+e.message+'</div>';
+    } else if(!isPoll){
+      toast('Refresh failed — showing the last loaded cards');
+    }
     if(rb && !keepSpin) rb.classList.remove('spinning');
     return;
   }
@@ -385,14 +411,15 @@ async function refreshTap(){
   // Snapshot which rows ALREADY have a thumbnail, so "new" is precise per-row rather
   // than a fragile total-count delta (rows can also leave the Discovery view).
   const before = readyThumbUrls();
-  await load({keepSpin:true});
+  loadFailures=0;
+  await load({keepSpin:true});   // NO poll flag -> this one press kicks Discovery Refresh once
 
   const startedAt=Date.now();
   let polls=0, lastNew=0, quietRounds=0;
 
   refreshWatcher=setInterval(async ()=>{
     polls++;
-    await load({keepSpin:true});   // repaints the feed → thumbnails appear on their own
+    await load({keepSpin:true, poll:true});   // pure read; repaints so thumbnails appear on their own
     const newOnes = allStories.filter(s =>
       (s.thumbnail_url||'').trim() && !before.has(s.source_url)
     ).length;
@@ -404,6 +431,11 @@ async function refreshTap(){
       quietRounds++;               // arrivals have stopped — the batch is finishing
     }
 
+    // Give up only after several CONSECUTIVE failures — one blip shouldn't end the run.
+    if(loadFailures >= 5){
+      stopRefreshWatch('Lost contact with the pipeline — tap ↻ to retry');
+      return;
+    }
     const timedOut = (Date.now()-startedAt > REFRESH_MAX_MS) || (polls >= REFRESH_MAX_POLLS);
     // Done = something landed AND two consecutive quiet checks (~30s of no arrivals).
     if((lastNew>0 && quietRounds>=2) || timedOut){
@@ -641,7 +673,7 @@ async function rerollStory(story,el){
     if(rerollPollers[url]) clearInterval(rerollPollers[url]);
     rerollPollers[url]=setInterval(async ()=>{
       rpolls++;
-      await load();  // refreshes allStories + repaints; rerolled row floats to top
+      await load({poll:true});  // v30: PURE READ. Unflagged, every poll re-kicked Discovery Refresh.
       const fresh=allStories.find(s=>s.source_url===url);
       const newThumb  = fresh ? (fresh.thumbnail_url||'').trim() : '';
       const newTaskId = fresh ? (fresh.thumbnail_task_id||'').trim() : '';
@@ -765,10 +797,10 @@ async function submitBackfill(){
     const MAX_POLLS=32;                               // hard cap: 32 × 15s = 8 min ceiling
     let polls=0;
     if(window._bfPoller) clearInterval(window._bfPoller);
-    await load();                                    // immediate refresh (surfaces pulls)
+    await load({poll:true});                         // v30: pure read (surfaces pulls)
     window._bfPoller=setInterval(async ()=>{
       polls++;
-      await load();
+      await load({poll:true});   // v30: pure read — must not re-trigger the pipeline
       // Count NEW backfill-origin cards that have a thumbnail and weren't here before.
       const newReady = allStories.filter(s=>
         String(s.source_url||'').startsWith('backfill://') &&
@@ -850,7 +882,7 @@ async function generateThumbnails(){
     toast(n ? `Submitting ${n} for render…` : 'Submitting…');
 
     // capture how many thumbnails exist right now, so we can detect new arrivals
-    await load();                            // refresh once to sync baseline
+    await load({poll:true});                 // v30: pure read to sync baseline
     const baseline = readyThumbCount();
     let arrived = 0;
 
@@ -866,7 +898,7 @@ async function generateThumbnails(){
     clearInterval(genPollTimer);
     genPollTimer=setInterval(async ()=>{
       gpolls++;
-      await load();                           // repaints feed; new thumbs appear here
+      await load({poll:true});                // v30: pure read; repaints as thumbs land
       const nowReady=readyThumbCount();
       const gained=nowReady-baseline;
       if(gained>arrived){
