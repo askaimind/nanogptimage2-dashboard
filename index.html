@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '30';
+    var BUILD = '31';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=30">
-<link rel="apple-touch-icon" href="favicon.png?v=30">
+<link rel="icon" type="image/png" href="favicon.png?v=31">
+<link rel="apple-touch-icon" href="favicon.png?v=31">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -70,11 +70,6 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .refresh-btn:active{background:#3a3a3a;}
 .refresh-btn svg{width:18px;height:18px;}
 .refresh-btn.spinning svg{animation:spin .8s linear infinite;}
-/* v28: while the pipeline is still working, the arrow keeps spinning AND gets a soft
-   halo so a long wait reads as "still going", not "stuck". Tap again to stop watching. */
-.refresh-btn.watching{box-shadow:0 0 0 0 rgba(255,255,255,.35);animation:watchPulse 1.6s ease-in-out infinite;}
-@keyframes watchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.30);}
-  50%{box-shadow:0 0 11px 2px rgba(255,255,255,.42);}}
 .genthumb-btn{background:var(--chip);border:1px solid rgba(255,255,255,.4);color:var(--green);
   height:34px;padding:0 12px;border-radius:17px;font-size:12px;font-weight:700;
   display:flex;align-items:center;cursor:pointer;flex:none;margin-left:8px;white-space:nowrap;}
@@ -163,7 +158,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 .empty{padding:60px 30px;text-align:center;color:var(--text-dim);font-size:14px;line-height:1.6;}
 .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#fff;color:#0f0f0f;
   padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:60;opacity:0;
-  transition:opacity .2s;pointer-events:none;}
+  transition:opacity .2s;pointer-events:none;max-width:88%;text-align:center;}
 .toast.show{opacity:1;}
 .loading{padding:50px;text-align:center;color:var(--text-dim);}
 .spinner{width:28px;height:28px;border:3px solid #333;border-top-color:var(--red);border-radius:50%;
@@ -198,12 +193,12 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v30</span></div>
-  <button class="refresh-btn" id="refresh-btn" title="Refresh — keeps spinning until new thumbnails land; tap again to stop watching" onclick="refreshTap()">
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v31</span></div>
+  <button class="refresh-btn" id="refresh-btn" title="Reload the feed from the sheet. Read only — starts nothing." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
-  <button class="genthumb-btn" id="genthumb-btn" title="Generate thumbnails for rows marked ADD" onclick="generateThumbnails()">Gen Thumbs</button>
-  <button class="genthumb-btn" id="backfill-btn" title="Request stories per channel — pulls existing, generates the rest" onclick="onBackfillTap()" style="margin-left:6px;">Backfill</button>
+  <button class="genthumb-btn" id="genthumb-btn" title="Generate thumbnails for rows marked ADD. Runs once per press." onclick="generateThumbnails()">Gen Thumbs</button>
+  <button class="genthumb-btn" id="backfill-btn" title="Request stories per channel — pulls existing, generates the rest" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
   <div class="src-toggles">
     <label><input type="checkbox" class="src" value="reddit" checked>Reddit</label>
     <label><input type="checkbox" class="src" value="youtube" checked>YouTube</label>
@@ -241,7 +236,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
       <div class="bf-title">Backfill channels</div>
       <button class="bf-x" onclick="closeBackfill()">✕</button>
     </div>
-    <div class="bf-sub">Set how many fresh stories you want per channel. Each request generates new options and adds them to the top of Discovery — request again anytime for more to choose from.</div>
+    <div class="bf-sub">Set how many fresh stories you want per channel. Each request generates new options and adds them to the top of Discovery. When it finishes, press ↻ to see them.</div>
     <div class="bf-list" id="bf-list"></div>
     <div class="bf-foot">
       <div class="bf-total" id="bf-total">0 requested</div>
@@ -251,19 +246,35 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 </div>
 
 <script>
+// ═══════════════════════════════════════════════════════════════════════════
+// v31 — NO AUTOMATIC ANYTHING. READ THIS BEFORE CHANGING A LINE.
+//
+// Ryan's rule: work happens ONLY when he presses a button. Having the page
+// open must never cause a single execution on the n8n side.
+//
+// What v31 removed, and why:
+//   • ALL setInterval pollers are gone — the Gen Thumbs poller, the circle-arrow
+//     watcher, the Reroll poller and the Backfill poller. In v29 those fired a
+//     read every 15s, and an unflagged read kicked Discovery Refresh, which flagged
+//     10 MORE rows as ADD and POSTed the Gen Thumbs webhook. One button press
+//     turned into dozens of executions and hundreds of paid image renders.
+//   • Polling was never needed anyway: `Respond Gen Thumbs` sits at the END of the
+//     render chain (after `Write Task + Flip Status`), so the POST does not answer
+//     until the thumbnail is finished and written to the sheet. Same for Reroll
+//     (`Write Reroll` -> `Respond Reroll`). We simply await the response.
+//   • EVERY read now goes to POLL_URL (?poll=1), with no exception. Even the
+//     circle-arrow. The `Poll Only?` IF node in NanoRunway_Dashboard_Reader_v18.11
+//     routes ?poll=1 straight to `Read Scored Stories` with no side effects, so no
+//     read this page ever makes can start Discovery Refresh, Collect & Score, or
+//     an image render.
+//
+// RULE FOR FUTURE EDITS: do not add setInterval, setTimeout-loops, retry loops, or
+// any call to READ_URL without ?poll=1. If a button needs to know when work is done,
+// await its own response — the workflow already responds at the end of its chain.
+// ═══════════════════════════════════════════════════════════════════════════
+
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
-// ── READ vs POLL — the single most important rule in this file ────────────
-// READ_URL has a SIDE EFFECT: the workflow wires nano-dashboard-read straight into
-// Kick Discovery Refresh, so every unflagged call launches a full scrape + image run.
-// ANY repeated/background read MUST pass {poll:true}. Only a deliberate user action
-// that is MEANT to start the pipeline may call load() unflagged. v29 fixed this for
-// the refresh watcher but missed the Gen Thumbs, Backfill and Reroll pollers, which
-// kept firing a pipeline run every 15s — n8n showed 7/20 concurrent executions from a
-// single button press. v30 flags all of them.
-// v29: a POLL is a pure read. Without ?poll=1 the read webhook ALSO kicks Discovery
-// Refresh, so the 15s watcher was launching a whole scrape+render run every poll and
-// saturating n8n until the webhook stopped answering. The workflow's "Poll Only?" IF
-// node routes ?poll=1 straight to the sheet read with no side effects.
+// The ONLY URL this page reads from. ?poll=1 = pure read, zero side effects.
 const POLL_URL = READ_URL + '?poll=1';
 const ACT_URL  = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-action';
 const GEN_URL  = 'https://askai.app.n8n.cloud/webhook/nano-gen-thumb';
@@ -281,9 +292,6 @@ const CAT_MATCH = {
 
 let allStories=[];
 let activeCat='All';
-// Consecutive failed reads. The watcher gives up only after several in a row, so one
-// blip (n8n busy, phone changing networks) never ends the watch or clears the feed.
-let loadFailures=0;
 let activeView='discovery';
 // One-time migration: older cached builds could persist a stale 'select' under a
 // card's URL. Purge any localActs on load for build v28 so no ghost survives the
@@ -340,111 +348,39 @@ function stripSrcDisplay(t){
   return x || String(t == null ? '' : t).trim();
 }
 
-// ---- data fetch (unchanged contract) ----
-// opts.keepSpin: leave the refresh arrow spinning (used by the v28 watcher, which owns
-// the spin state for the whole duration of a pipeline run rather than one HTTP call).
-async function load(opts){
-  const keepSpin = !!(opts && opts.keepSpin) || !!refreshWatcher;
-  const isPoll   = !!(opts && opts.poll);
+// ---- data fetch — ALWAYS a pure read, never starts work ----
+// There is no `poll` option any more because there is no non-poll mode. Every read
+// this page performs is side-effect free. See the v31 banner at the top.
+async function load(){
   const rb=document.getElementById('refresh-btn');
   if(rb) rb.classList.add('spinning');
   try{
-    const res = await fetch(isPoll ? POLL_URL : READ_URL);
+    const res = await fetch(POLL_URL);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     allStories = data.stories || [];
-    loadFailures = 0;
   }catch(e){
-    loadFailures++;
-    // v29: a transient failure must NOT wipe the feed. Cards already on screen stay
-    // exactly where they are; we just note it and let the next poll recover. Only a
-    // COLD start with nothing rendered shows the full-screen error.
+    // A failed read must never wipe cards already on screen.
     if(!allStories.length){
       document.getElementById('feed').innerHTML =
         '<div class="empty">Couldn\'t reach the pipeline.<br>'+e.message+'</div>';
-    } else if(!isPoll){
+    } else {
       toast('Refresh failed — showing the last loaded cards');
     }
-    if(rb && !keepSpin) rb.classList.remove('spinning');
-    return;
+    if(rb) rb.classList.remove('spinning');
+    return false;
   }
-  if(rb && !keepSpin) rb.classList.remove('spinning');
+  if(rb) rb.classList.remove('spinning');
   renderChips();
   render();
+  return true;
 }
 
-// ── v28: CIRCLE-ARROW WATCHER ────────────────────────────────────────────
-// The problem this fixes: pressing the arrow POSTs nano-dashboard-read, which returns
-// in ~1s while Discovery Refresh + Collect & Score + image generation keep running for
-// MINUTES. The old code tied the spin to that one HTTP call, so the arrow stopped almost
-// immediately and new thumbnails never appeared until a manual browser refresh.
-// Now the arrow owns a polling watcher: it spins (with a halo) and re-reads the feed
-// every 15s, repainting automatically as thumbnails land, and stops only when the run
-// has genuinely gone quiet — new thumbnails arrived and then two consecutive checks
-// brought nothing further — or on a hard timeout. Tapping the spinning arrow stops
-// watching (the run itself continues server-side), matching the Backfill button's
-// escape-hatch behaviour.
-let refreshWatcher=null;
-const REFRESH_POLL_MS = 15000;
-const REFRESH_MAX_MS  = 12*60*1000;   // Discovery Refresh ~3.5min + renders
-const REFRESH_MAX_POLLS = 48;         // belt-and-suspenders ceiling
-
-function readyThumbUrls(){
-  return new Set(allStories.filter(s=>(s.thumbnail_url||'').trim()).map(s=>s.source_url));
-}
-function stopRefreshWatch(msg){
-  if(refreshWatcher){ clearInterval(refreshWatcher); refreshWatcher=null; }
-  const rb=document.getElementById('refresh-btn');
-  if(rb){ rb.classList.remove('spinning','watching'); }
-  if(msg) toast(msg);
-}
+// Circle arrow = reload the feed from the sheet. That is ALL it does.
+// It does not scrape, does not score, does not render, does not flag rows.
 async function refreshTap(){
-  const rb=document.getElementById('refresh-btn');
-  // Second tap while watching = stop waiting (work continues in the background).
-  if(refreshWatcher){
-    stopRefreshWatch('Stopped watching — the run continues in the background');
-    return;
-  }
-  if(rb){ rb.classList.add('spinning','watching'); }
-  toast('Refreshing — collecting, scoring, rendering…');
-
-  // Snapshot which rows ALREADY have a thumbnail, so "new" is precise per-row rather
-  // than a fragile total-count delta (rows can also leave the Discovery view).
-  const before = readyThumbUrls();
-  loadFailures=0;
-  await load({keepSpin:true});   // NO poll flag -> this one press kicks Discovery Refresh once
-
-  const startedAt=Date.now();
-  let polls=0, lastNew=0, quietRounds=0;
-
-  refreshWatcher=setInterval(async ()=>{
-    polls++;
-    await load({keepSpin:true, poll:true});   // pure read; repaints so thumbnails appear on their own
-    const newOnes = allStories.filter(s =>
-      (s.thumbnail_url||'').trim() && !before.has(s.source_url)
-    ).length;
-
-    if(newOnes>lastNew){
-      lastNew=newOnes; quietRounds=0;
-      toast(newOnes+' new thumbnail'+(newOnes===1?'':'s')+' in');
-    } else if(lastNew>0){
-      quietRounds++;               // arrivals have stopped — the batch is finishing
-    }
-
-    // Give up only after several CONSECUTIVE failures — one blip shouldn't end the run.
-    if(loadFailures >= 5){
-      stopRefreshWatch('Lost contact with the pipeline — tap ↻ to retry');
-      return;
-    }
-    const timedOut = (Date.now()-startedAt > REFRESH_MAX_MS) || (polls >= REFRESH_MAX_POLLS);
-    // Done = something landed AND two consecutive quiet checks (~30s of no arrivals).
-    if((lastNew>0 && quietRounds>=2) || timedOut){
-      stopRefreshWatch(
-        lastNew>0 ? `Ready ✓ — ${lastNew} new thumbnail${lastNew===1?'':'s'}`
-                  : 'No new thumbnails yet — tap ↻ to check again'
-      );
-    }
-  }, REFRESH_POLL_MS);
+  await load();
+  toast('Feed reloaded');
 }
 
 function renderChips(){
@@ -512,7 +448,7 @@ function render(){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===activeView));
   if(!list.length){
     feed.innerHTML='<div class="empty">No stories here yet.<br>'+
-      (activeView==='discovery'?'Run the collector to populate Discovery.':'Nothing in this bucket.')+'</div>';
+      (activeView==='discovery'?'Mark a row Thumbnail Request = ADD, then press Gen Thumbs.':'Nothing in this bucket.')+'</div>';
     return;
   }
   feed.innerHTML='';
@@ -561,12 +497,7 @@ function card(s){
     b.onclick=(ev)=>{ev.stopPropagation();sendAction(b.dataset.act,s,el);};
   });
   const rb=el.querySelector('.reroll-btn');
-  if(rb){
-    rb.onclick=(ev)=>{ev.stopPropagation();rerollStory(s,el);};
-    // If a reroll for this row is still in flight, keep the button spinning across
-    // the load()/re-render cycles so the animation stays continuous until it lands.
-    if(rerollPollers[s.source_url]){ rb.disabled=true; rb.classList.add('spinning'); rb.textContent='⟳ Rerolling…'; }
-  }
+  if(rb) rb.onclick=(ev)=>{ev.stopPropagation();rerollStory(s,el);};
   return el;
 }
 
@@ -631,95 +562,42 @@ async function sendAction(action,story,el){
   setTimeout(render,260);
 }
 
-// ---- reroll: AI re-reads the story, fixes category, regenerates thumbnail+headline.
-// If the category changes, it also rewrites pitch/caption/summary. The workflow sets
-// Status=scored, so the row returns to the TOP of Discovery (float-to-top sort) no
-// matter which tab it was sitting in. The spinner keeps going until THIS row's new
-// thumbnail actually lands (detected by the thumbnail URL changing), so the animation
-// is honest: it stops only when the work is genuinely done (or a hard timeout). ----
+// ---- Reroll: one press, one run, one repaint. ----
+// `Write Reroll` -> `Respond Reroll` is the last link in that chain, so this fetch
+// does not resolve until the reroll has finished and been written to the sheet.
+// We await it, repaint once, and stop. No poller.
 async function rerollStory(story,el){
   const url=story.source_url;
   if(!url){ toast('Reroll: missing source URL'); return; }
   const btn=el.querySelector('.reroll-btn');
-  // Remember the thumbnail AND task id this row had BEFORE the reroll, so we can detect
-  // the genuinely-new render. Reroll writes a NEW Thumbnail Task ID immediately and
-  // blanks the URL; the render callback later fills the new URL. "Landed" = a fresh
-  // non-empty URL has arrived that differs from the old one.
-  const prevThumb=(story.thumbnail_url||'').trim();
-  const prevTaskId=(story.thumbnail_task_id||'').trim();
-  const startSpin=()=>{ if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; } };
-  const stopSpin=(label)=>{ if(btn){ btn.classList.remove('spinning'); btn.disabled=false; btn.textContent=label||'⟳ Reroll'; } };
-  startSpin();
-  toast('Rerolling — AI re-reading story…');
+  if(btn && btn.disabled) return;                     // guard against a double tap
+  if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; }
+  toast('Rerolling — this takes a minute or two. Leave the page open.');
   try{
     const res=await fetch(REROLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'reroll',source_url:url,story})});
     const data=await res.json().catch(()=>({}));
     const cat=data&&data.category?data.category:null;
     const changed=data&&data.changed;
-    toast(cat?(changed?`Recategorized → ${shortCat(cat)} — rendering…`:`Category held: ${shortCat(cat)} — rendering…`):'Reroll submitted — rendering…');
-    // Jump to Discovery so the user is looking at where the rerolled card will appear.
-    activeView='discovery';
-    // Clear any local action on this row so nothing keeps it out of Discovery; the
-    // workflow's Status=scored is authoritative once the next load reads it.
+    // Clear any local action so the rerolled row is free to return to Discovery.
     if(localActs[url]){ delete localActs[url]; saveActs(); }
-
-    // Poll until THIS row's thumbnail actually changes (the real "done" signal).
-    // Keep spinning the whole time so you know it's still working. Hard cap at 5 min.
-    const startedAt=Date.now();
-    const MAX_MS=5*60*1000;
-    const MAX_POLLS=22;                    // hard cap: 22 × 15s ≈ 5.5 min ceiling
-    let rpolls=0;
-    if(rerollPollers[url]) clearInterval(rerollPollers[url]);
-    rerollPollers[url]=setInterval(async ()=>{
-      rpolls++;
-      await load({poll:true});  // v30: PURE READ. Unflagged, every poll re-kicked Discovery Refresh.
-      const fresh=allStories.find(s=>s.source_url===url);
-      const newThumb  = fresh ? (fresh.thumbnail_url||'').trim() : '';
-      const newTaskId = fresh ? (fresh.thumbnail_task_id||'').trim() : '';
-      // Honest "done": a fresh, non-empty thumbnail URL has landed that differs from the
-      // old one (proves the render finished). A new task id with a still-blank URL
-      // means it's mid-render -> keep spinning. Same URL as before -> stale, keep spinning.
-      const taskAdvanced = newTaskId && newTaskId!==prevTaskId;
-      const landed = newThumb && newThumb!==prevThumb;       // url change is the hard signal
-      const timedOut = (Date.now()-startedAt>MAX_MS) || (rpolls>=MAX_POLLS);
-      if(landed || timedOut){
-        clearInterval(rerollPollers[url]); delete rerollPollers[url];
-        if(landed){ toast('Reroll ready ✓ — top of Discovery'); }
-        else      { toast('Reroll still rendering — tap ↻ to check'); }
-        // The button lives on the card element, which may have been re-rendered by load().
-        // Re-find it; if the card moved/re-rendered, the fresh card shows the new image already.
-        const liveBtn=document.querySelector(`.card[data-url="${cssEsc(url)}"] .reroll-btn`);
-        if(liveBtn){ liveBtn.classList.remove('spinning'); liveBtn.disabled=false; liveBtn.textContent='⟳ Reroll'; }
-        else stopSpin();
-      }
-    },15000);
+    activeView='discovery';
+    await load();                                     // single repaint, pure read
+    toast(cat?(changed?`Reroll done — recategorized to ${shortCat(cat)}`:`Reroll done — ${shortCat(cat)}`):'Reroll done ✓');
   }catch(err){
     console.error('reroll failed:',err);
-    toast('Reroll failed — retry');
-    stopSpin();
+    // The connection dropped, but the render is still finishing server-side.
+    toast('Lost the connection — press ↻ in a minute to see the result');
+  }finally{
+    const liveBtn=document.querySelector(`.card[data-url="${cssEsc(url)}"] .reroll-btn`) || btn;
+    if(liveBtn){ liveBtn.classList.remove('spinning'); liveBtn.disabled=false; liveBtn.textContent='⟳ Reroll'; }
   }
 }
-// Track active reroll pollers per row so re-renders don't spawn duplicates.
-const rerollPollers={};
 function cssEsc(s){ return String(s).replace(/["\\]/g,'\\$&'); }
 
-// ---- Backfill: request N stories per channel. Pulls existing unused cards first,
-// generates the remainder from the Channel Seeds tab. All land at top of Discovery. ----
-// Reuse the dashboard's canonical category list (minus 'All') and the short->full map.
+// ---- Backfill: request N stories per channel. ----
 const BF_CHANNELS = CATS.filter(c=>c!=='All');
 const bfCounts = {};   // {shortLabel: n}
-// Backfill button tap: if it's currently working (spinning), a tap STOPS the wait
-// (manual escape hatch); otherwise it opens the request modal.
-function onBackfillTap(){
-  const b=document.getElementById('backfill-btn');
-  if(b && b.classList.contains('spinning')){
-    stopBackfillSpin();
-    toast('Stopped watching — cards still finish in the background');
-    return;
-  }
-  openBackfill();
-}
 function openBackfill(){
   BF_CHANNELS.forEach(c=>{ if(bfCounts[c]==null) bfCounts[c]=0; });
   const list=document.getElementById('bf-list');
@@ -749,8 +627,11 @@ function bfUpdateTotal(){
   document.getElementById('bf-total').textContent=total+' requested';
   document.getElementById('bf-go').disabled = total<1;
 }
+// The Backfill backend answers as soon as it has planned the work; generation keeps
+// running server-side afterwards. That is the ONE place where the response does not
+// mean "finished". v30 used a 15s poller to cover the gap; v31 does not poll — it
+// tells you to press ↻ when you're ready to look.
 async function submitBackfill(){
-  // Build requests[] using the FULL canonical category the backend expects.
   const requests=[];
   BF_CHANNELS.forEach(c=>{
     const n=+bfCounts[c]||0;
@@ -758,83 +639,30 @@ async function submitBackfill(){
   });
   if(!requests.length){ return; }
   const go=document.getElementById('bf-go');
-  const bfBtn=document.getElementById('backfill-btn');   // the appbar button that will spin
+  const bfBtn=document.getElementById('backfill-btn');
   go.disabled=true; go.classList.add('working'); go.textContent='Working…';
-  // Start the spin IMMEDIATELY (before the network round-trip) so there's instant,
-  // unmistakable feedback the moment you tap Request — and scroll it into view since
-  // the appbar scrolls horizontally and the button may be off-screen on Discovery.
-  if(bfBtn){
-    bfBtn.classList.add('spinning');   // stays enabled so a tap can stop the wait
-    try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){}
-  }
+  if(bfBtn) bfBtn.classList.add('spinning');
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
   toast('Backfilling — '+summary+'…');
-  // Snapshot the URLs of any backfill-origin cards already present, so we can detect
-  // the SPECIFIC new ones that arrive (precise, not a fragile total-count delta).
-  const beforeBackfillUrls = new Set(
-    allStories.filter(s=>String(s.source_url||'').startsWith('backfill://'))
-              .map(s=>s.source_url)
-  );
   try{
-    // The v2 backend responds IMMEDIATELY (after Pull+Plan) with the plan counts;
-    // generation continues in the background. So this fetch returns in ~2s, NOT after
-    // the slow thumbnail render — no more false "failed".
     const res=await fetch(BACKFILL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({requests})});
     const data=await res.json().catch(()=>({}));
-    const pulled=(data&&data.pulled)||0;
-    const generating=(data&&data.generating)||0;   // count being generated fresh
+    const generating=(data&&data.generating)||0;
     closeBackfill();
-    activeView='discovery';                          // look at where cards will land
-    toast(`Backfill accepted — generating ${generating} fresh…`);
-
-    // Spinner already started on submit; poll Discovery until the expected number of
-    // NEW cards have landed, or a hard timeout. Pulls appear on the next load; generated
-    // cards appear as their renders arrive over the following minutes.
-    if(bfBtn){ try{ bfBtn.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }catch(_){} }
-    const startedAt=Date.now();
-    const MAX_MS=8*60*1000;                          // generation can take a few minutes
-    const MAX_POLLS=32;                               // hard cap: 32 × 15s = 8 min ceiling
-    let polls=0;
-    if(window._bfPoller) clearInterval(window._bfPoller);
-    await load({poll:true});                         // v30: pure read (surfaces pulls)
-    window._bfPoller=setInterval(async ()=>{
-      polls++;
-      await load({poll:true});   // v30: pure read — must not re-trigger the pipeline
-      // Count NEW backfill-origin cards that have a thumbnail and weren't here before.
-      const newReady = allStories.filter(s=>
-        String(s.source_url||'').startsWith('backfill://') &&
-        !beforeBackfillUrls.has(s.source_url) &&
-        (s.thumbnail_url||'').trim()
-      ).length;
-      // "Done" when the generated cards have rendered. (Pulls land immediately on the
-      // first load and need no thumbnail wait.) If nothing was to be generated, we're
-      // done as soon as we've refreshed once.
-      const done = generating>0 ? (newReady>=generating) : true;
-      // TWO independent stops so the poll can never outlive the work: elapsed time AND
-      // a hard attempt cap (belt-and-suspenders even if detection somehow never fires).
-      const timedOut = (Date.now()-startedAt>MAX_MS) || (polls>=MAX_POLLS);
-      if(done || timedOut){
-        stopBackfillSpin();
-        if(done){ toast(`Backfill ready ✓ — ${newReady} new at top of Discovery`); }
-        else    { toast('Backfill still rendering — tap ↻ to check'); }
-      }
-    }, 15000);
+    activeView='discovery';
+    await load();                                     // shows any instant pulls
+    toast(generating
+      ? `Accepted — ${generating} generating. Press ↻ in a few minutes to see them.`
+      : 'Backfill accepted. Press ↻ to see the results.');
   }catch(err){
     console.error('backfill failed:',err);
     toast('Backfill request failed — retry');
-    stopBackfillSpin();
   }finally{
+    if(bfBtn) bfBtn.classList.remove('spinning');
     go.disabled=false; go.classList.remove('working'); go.textContent='Request';
     bfUpdateTotal();
   }
-}
-// Stop the Backfill button's working-fade and clear the poller. Also the manual
-// escape hatch: tapping the spinning Backfill button calls this to cancel the wait.
-function stopBackfillSpin(){
-  if(window._bfPoller){ clearInterval(window._bfPoller); window._bfPoller=null; }
-  const b=document.getElementById('backfill-btn');
-  if(b){ b.classList.remove('spinning'); b.disabled=false; }
 }
 
 function shortCat(c){
@@ -849,79 +677,48 @@ function shortCat(c){
   if(c.includes('Philosophy'))return'Philosophy';
   if(c.includes('Travel'))return'Travel';
   if(c.includes('History'))return'History';
-  if(c.includes('Mystery'))return'Mystery';
   return c;
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
-  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2200);}
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3200);}
 
-// Fire the regen webhook: processes every Discovery row with Thumbnail Request = ADD.
-// n8n generates each row's image (OpenAI, ~10-40s each), uploads straight to R2 and
-// writes Thumbnail URL. Because rendering is async, we poll the feed until the new
-// thumbnails arrive and keep the button visibly "rendering" so you know more are coming.
-let genPollTimer=null;
-function readyThumbCount(){
-  return allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
-}
+// ---- Gen Thumbs: ONE press = ONE run. ----
+// `Respond Gen Thumbs` is wired after `Write Task + Flip Status`, the last node in the
+// render chain, so this POST does not resolve until every ADD row has been rendered,
+// uploaded to R2 and written back to the sheet. We await it, repaint once, done.
+// No timer, no poller, nothing left running when this function returns.
+let genBusy=false;
 async function generateThumbnails(){
+  if(genBusy) return;                                 // a second tap does nothing
   const btn=document.getElementById('genthumb-btn');
-  if(btn.classList.contains('rendering')) return; // already running
   const original='Gen Thumbs';
-  btn.disabled=true; btn.textContent='Submitting…';
+  genBusy=true;
+  btn.disabled=true; btn.classList.add('rendering'); btn.textContent='Rendering…';
+  toast('Rendering — a couple of minutes. Leave the page open.');
   try{
     const res=await fetch(GEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'gen_thumbs'})});
     const data=await res.json().catch(()=>({}));
     const n=(data&&typeof data.submitted==='number')?data.submitted:null;
-
-    if(n===0){ toast('No ADD rows found'); btn.disabled=false; btn.textContent=original; return; }
-
-    const expected = n || 1;                 // how many we're waiting on
-    toast(n ? `Submitting ${n} for render…` : 'Submitting…');
-
-    // capture how many thumbnails exist right now, so we can detect new arrivals
-    await load({poll:true});                 // v30: pure read to sync baseline
-    const baseline = readyThumbCount();
-    let arrived = 0;
-
-    // enter "rendering" state: button pulses until all expected land (or timeout)
-    btn.disabled=false;                      // tappable again, but guarded above
-    btn.classList.add('rendering');
-    btn.textContent=`Rendering ${expected}…`;
-
-    const startedAt=Date.now();
-    const MAX_MS=6*60*1000;                   // allow the batch up to 6 min
-    const MAX_POLLS=26;                        // hard cap: 26 × 15s ≈ 6.5 min ceiling
-    let gpolls=0;
-    clearInterval(genPollTimer);
-    genPollTimer=setInterval(async ()=>{
-      gpolls++;
-      await load({poll:true});                // v30: pure read; repaints as thumbs land
-      const nowReady=readyThumbCount();
-      const gained=nowReady-baseline;
-      if(gained>arrived){
-        const justLanded=gained-arrived;
-        arrived=gained;
-        toast(`${arrived} of ${expected} ready`);
-        btn.textContent = arrived>=expected ? 'Done ✓' : `Rendering ${expected-arrived}…`;
-      }
-      const timedOut=(Date.now()-startedAt>MAX_MS) || (gpolls>=MAX_POLLS);
-      if(arrived>=expected || timedOut){
-        clearInterval(genPollTimer); genPollTimer=null;
-        btn.classList.remove('rendering');
-        if(timedOut && arrived<expected){
-          toast(`${arrived} of ${expected} ready — tap ↻ to check the rest`);
-        }
-        setTimeout(()=>{ btn.textContent=original; }, 2500);
-      }
-    }, 15000);                                // check every 15s
-
+    if(n===0){
+      toast('No rows marked ADD — nothing to render');
+    }else{
+      await load();                                   // single repaint, pure read
+      toast(n ? `Done ✓ — ${n} thumbnail${n===1?'':'s'} rendered` : 'Done ✓');
+      btn.textContent='Done ✓';
+      setTimeout(()=>{ btn.textContent=original; },2500);
+    }
   }catch(err){
     console.error('gen-thumb failed:',err);
-    toast('Gen Thumbs failed — retry');
-    btn.classList.remove('rendering'); btn.disabled=false; btn.textContent=original;
+    // Most likely the response timed out on a long batch. The render is still
+    // finishing server-side — do NOT retry, that would double the spend.
+    toast('Lost the connection — the render is still finishing. Press ↻ in a minute.');
+  }finally{
+    genBusy=false;
+    btn.classList.remove('rendering'); btn.disabled=false;
+    if(btn.textContent==='Rendering…') btn.textContent=original;
   }
 }
 
@@ -929,6 +726,7 @@ async function generateThumbnails(){
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{activeView=t.dataset.view;render();});
 document.querySelectorAll('.src').forEach(c=>c.onchange=render);
 
+// Initial paint. This is a pure read (?poll=1) — opening the page starts no work.
 load();
 </script>
 </body>
