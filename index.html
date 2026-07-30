@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '31';
+    var BUILD = '32';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=31">
-<link rel="apple-touch-icon" href="favicon.png?v=31">
+<link rel="icon" type="image/png" href="favicon.png?v=32">
+<link rel="apple-touch-icon" href="favicon.png?v=32">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -74,7 +74,13 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
   height:34px;padding:0 12px;border-radius:17px;font-size:12px;font-weight:700;
   display:flex;align-items:center;cursor:pointer;flex:none;margin-left:8px;white-space:nowrap;}
 .genthumb-btn:active{transform:scale(.97);}
-.genthumb-btn:disabled{opacity:.6;cursor:default;}
+.genthumb-btn:disabled{cursor:default;}
+/* v32: the old rule dimmed the button to 60% while it was disabled, which fought the
+   `rendering` pulse and made a working button look greyed-out and stuck. Only dim a
+   button that is disabled and NOT actively rendering. */
+.genthumb-btn:disabled:not(.rendering){opacity:.6;}
+.newpill{position:absolute;left:8px;top:8px;background:#fff;color:#0f0f0f;font-size:11px;
+  font-weight:800;letter-spacing:.04em;padding:3px 7px;border-radius:5px;z-index:2;}
 .genthumb-btn.rendering{border-color:var(--green);color:var(--green);
   animation:genpulse 1.1s ease-in-out infinite;}
 @keyframes genpulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(255,255,255,.0);}
@@ -193,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v31</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v32</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Reload the feed from the sheet. Read only — starts nothing." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -379,8 +385,13 @@ async function load(){
 // Circle arrow = reload the feed from the sheet. That is ALL it does.
 // It does not scrape, does not score, does not render, does not flag rows.
 async function refreshTap(){
-  await load();
-  toast('Feed reloaded');
+  const before = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
+  const ok = await load();
+  if(!ok) return;
+  const after = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
+  const gained = after - before;
+  toast(gained>0 ? `Feed reloaded — ${gained} new thumbnail${gained===1?'':'s'} at the top`
+                 : `Feed reloaded — ${after} thumbnails, nothing new`);
 }
 
 function renderChips(){
@@ -429,6 +440,20 @@ function relDate(d){
   const mo=Math.floor(days/30); if(mo<12) return mo+(mo===1?' month ago':' months ago');
   const yr=Math.floor(days/365); return yr+(yr===1?' year ago':' years ago');
 }
+// Pull the render timestamp out of an R2 thumbnail key. Returns 0 when there isn't
+// one, so those rows fall to the bottom rather than jumping to the top.
+function renderedAt(s){
+  const url=String((s&&s.thumbnail_url)||'');
+  const file=url.split('/').pop()||'';
+  let best=0;
+  (file.match(/\d{13}/g)||[]).forEach(n=>{ const v=+n; if(v>1.5e12 && v<4e12 && v>best) best=v; });
+  return best;
+}
+// A thumbnail rendered in the last 2 hours gets a NEW pill, so a fresh batch is
+// unmistakable even when several land at once.
+const NEW_WINDOW_MS = 2*60*60*1000;
+function isNew(s){ const t=renderedAt(s); return t>0 && (Date.now()-t) < NEW_WINDOW_MS; }
+
 const initials = name => (name||'?').replace(/[^A-Za-z ]/g,'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 
 function render(){
@@ -442,8 +467,22 @@ function render(){
   // In Discovery, a FRESH re-request (sheet Status=scored) floats to the very top —
   // so when you flag an OLD entry ADD and run Gen Thumbs, it lands where you'll see it
   // immediately instead of sinking to the bottom by its original (old) date.
-  const fresh=s=> activeView==='discovery' && SHEET_RETURNS_TO_DISCOVERY.has(s.status) ? 1 : 0;
-  list.sort((a,b)=> (fresh(b)-fresh(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
+  // ── v32: SORT DISCOVERY BY RENDER TIME, NOT DISCOVERY DATE ──────────────
+  // The old rule floated a row to the top when its sheet Status was 'scored'. But
+  // Collect & Score writes 'scored' to essentially EVERY row, so that flag was true
+  // for all 829 of them and sorted nothing. The order then fell through to
+  // `date_added` — the day the STORY was found, not the day its thumbnail was made.
+  // A story discovered yesterday whose thumbnail you rendered two minutes ago sank
+  // below everything scraped today, which is why fresh renders "never appeared".
+  //
+  // The render time is already in the data: every R2 key carries the Date.now() that
+  // made it. Three key shapes exist and all three parse —
+  //   thumbs/753-1785440849974.jpg        Gen Thumbs (v18.13+)
+  //   thumbs/<row>-<ts>.png               Gen Thumbs (older)
+  //   thumbs/new-<ts>-<rand>.png          Collect & Score
+  // so we take the largest 13-digit epoch in the filename. Newest render first.
+  if(activeView==='discovery') list.sort((a,b)=> (renderedAt(b)-renderedAt(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
+  else                         list.sort((a,b)=> (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   // bottom-nav active state
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===activeView));
   if(!list.length){
@@ -478,7 +517,7 @@ function card(s){
   const subline=[chName, viewBits.join(' · '), ageStr].filter(Boolean).join(' · ');
 
   el.innerHTML=`
-    <div class="thumb-wrap">${thumbInner}${dur?`<span class="dur">${dur}</span>`:''}</div>
+    <div class="thumb-wrap">${isNew(s)?'<span class="newpill">NEW</span>':''}${thumbInner}${dur?`<span class="dur">${dur}</span>`:''}</div>
     <div class="statusline"></div>
     <div class="meta">
       <div class="avatar">${initials(chName)}</div>
@@ -571,7 +610,8 @@ async function rerollStory(story,el){
   if(!url){ toast('Reroll: missing source URL'); return; }
   const btn=el.querySelector('.reroll-btn');
   if(btn && btn.disabled) return;                     // guard against a double tap
-  if(btn){ btn.disabled=true; btn.classList.add('spinning'); btn.textContent='⟳ Rerolling…'; }
+  if(btn){ btn.disabled=true; btn.classList.add('spinning'); }
+  const stopClock=startClock(btn,'⟳ Rerolling');
   toast('Rerolling — this takes a minute or two. Leave the page open.');
   try{
     const res=await fetch(REROLL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -589,6 +629,7 @@ async function rerollStory(story,el){
     // The connection dropped, but the render is still finishing server-side.
     toast('Lost the connection — press ↻ in a minute to see the result');
   }finally{
+    stopClock();
     const liveBtn=document.querySelector(`.card[data-url="${cssEsc(url)}"] .reroll-btn`) || btn;
     if(liveBtn){ liveBtn.classList.remove('spinning'); liveBtn.disabled=false; liveBtn.textContent='⟳ Reroll'; }
   }
@@ -642,6 +683,7 @@ async function submitBackfill(){
   const bfBtn=document.getElementById('backfill-btn');
   go.disabled=true; go.classList.add('working'); go.textContent='Working…';
   if(bfBtn) bfBtn.classList.add('spinning');
+  const stopClock=startClock(bfBtn,'Backfilling');
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
   toast('Backfilling — '+summary+'…');
   try{
@@ -659,7 +701,8 @@ async function submitBackfill(){
     console.error('backfill failed:',err);
     toast('Backfill request failed — retry');
   }finally{
-    if(bfBtn) bfBtn.classList.remove('spinning');
+    stopClock();
+    if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.textContent='Backfill'; }
     go.disabled=false; go.classList.remove('working'); go.textContent='Request';
     bfUpdateTotal();
   }
@@ -680,6 +723,23 @@ function shortCat(c){
   return c;
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// ── v32: ELAPSED CLOCK ───────────────────────────────────────────────────
+// READ THIS BEFORE YOU PANIC ABOUT THE WORD setInterval.
+// This ticks a button's TEXT once a second so a long job reads as "0:47" instead of
+// an ambiguous pulse. It makes NO network call, touches NO webhook, and starts NO
+// work of any kind — it only rewrites a label. Every one is cleared in a `finally`
+// block, so it cannot outlive the request it belongs to. This is a stopwatch, not a
+// poller; the v31 rule against polling is untouched.
+function startClock(btn, label){
+  if(!btn) return ()=>{};
+  const t0=Date.now();
+  const paint=()=>{ const s=Math.floor((Date.now()-t0)/1000);
+    btn.textContent = label+' '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+  paint();
+  const id=setInterval(paint, 1000);
+  return ()=>clearInterval(id);
+}
+
 let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3200);}
@@ -695,7 +755,8 @@ async function generateThumbnails(){
   const btn=document.getElementById('genthumb-btn');
   const original='Gen Thumbs';
   genBusy=true;
-  btn.disabled=true; btn.classList.add('rendering'); btn.textContent='Rendering…';
+  btn.disabled=true; btn.classList.add('rendering');
+  const stopClock=startClock(btn,'Rendering…');
   toast('Rendering — a couple of minutes. Leave the page open.');
   try{
     const res=await fetch(GEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -716,9 +777,10 @@ async function generateThumbnails(){
     // finishing server-side — do NOT retry, that would double the spend.
     toast('Lost the connection — the render is still finishing. Press ↻ in a minute.');
   }finally{
+    stopClock();
     genBusy=false;
     btn.classList.remove('rendering'); btn.disabled=false;
-    if(btn.textContent==='Rendering…') btn.textContent=original;
+    if(btn.textContent.startsWith('Rendering…')) btn.textContent=original;
   }
 }
 
