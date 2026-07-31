@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '33';
+    var BUILD = '35';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=33">
-<link rel="apple-touch-icon" href="favicon.png?v=33">
+<link rel="icon" type="image/png" href="favicon.png?v=35">
+<link rel="apple-touch-icon" href="favicon.png?v=35">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,12 +199,12 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v33</span></div>
-  <button class="refresh-btn" id="refresh-btn" title="Reload the feed from the sheet. Read only — starts nothing." onclick="refreshTap()">
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v35</span></div>
+  <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
   <button class="genthumb-btn" id="genthumb-btn" title="Renders every row marked ADD, one at a time, and stops the moment the last one is written." onclick="generateThumbnails()">Gen Thumbs</button>
-  <button class="genthumb-btn" id="backfill-btn" title="Request stories per channel — pulls existing, generates the rest" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
+  <button class="genthumb-btn" id="backfill-btn" title="Create new stories per channel and render their thumbnails, one at a time, until they're done" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
   <div class="src-toggles">
     <label><input type="checkbox" class="src" value="reddit" checked>Reddit</label>
     <label><input type="checkbox" class="src" value="youtube" checked>YouTube</label>
@@ -242,7 +242,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
       <div class="bf-title">Backfill channels</div>
       <button class="bf-x" onclick="closeBackfill()">✕</button>
     </div>
-    <div class="bf-sub">Set how many fresh stories you want per channel. Each request generates new options and adds them to the top of Discovery. When it finishes, press ↻ to see them.</div>
+    <div class="bf-sub">Set how many fresh stories you want per channel. One press creates them, then renders their thumbnails one at a time — the button runs until the last one is written and the feed refreshes itself.</div>
     <div class="bf-list" id="bf-list"></div>
     <div class="bf-foot">
       <div class="bf-total" id="bf-total">0 requested</div>
@@ -299,6 +299,32 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 //     finishes its one row server-side, no further request is ever made, and the
 //     un-rendered rows keep their ADD flag so the next press resumes exactly
 //     where the chain stopped. Nothing ever runs unattended.
+//
+// ── v34 ADDENDUM — THE CIRCLE ARROW IS NOW THE DISCOVERY CYCLE ──────────────
+// One press of the circle arrow = ONE full cycle, two phases, both bounded:
+//   PHASE A (one request to START_URL): Dashboard Reader's Start Run chain
+//     acquires a server-side run lock, calls Discovery Refresh v2 inline and
+//     WAITS — scrape, score, append (Collect and Score v19.5 renders NO
+//     images), flag the top 10 no-thumbnail rows ADD — then answers
+//     { flagged: N }. A second press during the scrape gets 409
+//     already_running from the lock.
+//   PHASE B: the SAME shared render chain Gen Thumbs uses (runRenderChain),
+//     one request = one execution = one row, until remaining hits 0.
+// If phase A outlives the ~2-min connection ceiling, the fetch dies but the
+// execution completes server-side, the ADD flags land, and pressing Gen
+// Thumbs renders them — the resume path, never a retry. The PURE feed reload
+// moved to re-tapping the active Discovery tab in the bottom nav (reloadFeed).
+// Every recovery toast now points there — NEVER at the circle arrow, because
+// the arrow now costs a scrape (and ~1,000 YouTube API units) per press.
+//
+// ── v35 ADDENDUM — BACKFILL JOINS THE CHAIN ─────────────────────────────────
+// Backfill v21 responds only AFTER its stories are appended and flagged ADD
+// (v20 answered at plan time and kept generating afterwards — the last place
+// work ran after a response). submitBackfill therefore awaits { flagged: N },
+// then runs the SAME runRenderChain as Gen Thumbs and the circle arrow. All
+// three buttons now share one render path, one progress display, one resume
+// story (un-rendered rows keep ADD; Gen Thumbs continues them), and one
+// guarantee: when the animation stops, nothing is running anywhere.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -308,6 +334,10 @@ const ACT_URL  = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-action';
 const GEN_URL  = 'https://askai.app.n8n.cloud/webhook/nano-gen-thumb';
 const REROLL_URL = 'https://askai.app.n8n.cloud/webhook/nano-reroll';
 const BACKFILL_URL = 'https://askai.app.n8n.cloud/webhook/nano-backfill';
+// v34: the circle arrow's discover step. ONE bounded request: scrape -> score ->
+// append -> flag top 10, answered only when flagging is complete (run-locked
+// server-side, 409 already_running on a second press).
+const START_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-start';
 
 // 10 canonical categories (chip labels are short; match against full Channel Category)
 const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel'];
@@ -404,9 +434,10 @@ async function load(){
   return true;
 }
 
-// Circle arrow = reload the feed from the sheet. That is ALL it does.
-// It does not scrape, does not score, does not render, does not flag rows.
-async function refreshTap(){
+// Pure feed reload — reads the sheet, repaints, starts NOTHING. Reached by
+// re-tapping the active Discovery tab in the bottom nav (v34: the circle
+// arrow is the discovery cycle now, so the cheap reload lives here).
+async function reloadFeed(){
   const before = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
   const ok = await load();
   if(!ok) return;
@@ -414,6 +445,54 @@ async function refreshTap(){
   const gained = after - before;
   toast(gained>0 ? `Feed reloaded — ${gained} new thumbnail${gained===1?'':'s'} at the top`
                  : `Feed reloaded — ${after} thumbnails, nothing new`);
+}
+
+// ---- Circle arrow: ONE full discovery cycle per press. ----
+// Phase A: one bounded request — scrape, score, append, flag top 10 — answered
+// only when flagging is done (server run lock rejects overlapping presses).
+// Phase B: the shared Gen Thumbs render chain, one row per execution.
+// The arrow spins through BOTH phases and stops when the last row is written.
+// No timers, no retries; closing the tab ends everything after the in-flight
+// execution. See the v34 addendum in the banner above.
+let discoverBusy=false;
+async function refreshTap(){
+  if(discoverBusy){ toast('A discovery run is already in progress'); return; }
+  if(genBusy||bfBusy){ toast('Another run is in progress — wait for it to finish'); return; }
+  const rb=document.getElementById('refresh-btn');
+  discoverBusy=true;
+  if(rb) rb.classList.add('spinning');
+  toast('Finding new stories — the scrape takes a minute or two. Leave the page open.');
+  let flagged=0;
+  try{
+    const res=await fetch(START_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:'circle_arrow'})});
+    const data=await res.json().catch(()=>({}));
+    if(data && data.status==='already_running'){
+      toast('A discovery run is already going on the server — try again in a minute');
+      discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
+    }
+    flagged=Number((data && data.flagged) || 0);
+  }catch(err){
+    // The scrape outlived the ~2-min connection ceiling. It is still finishing
+    // server-side and will flag its rows when done; NOTHING further starts on
+    // its own. Do not retry — press Gen Thumbs in a minute to render the rows.
+    console.error('discover phase failed/timed out:',err);
+    toast('The scrape is taking longer than the connection allows — in a minute, press Gen Thumbs to render what it found');
+    discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
+  }
+  if(flagged===0){
+    await load();
+    toast('Scrape finished — nothing new qualified for a thumbnail');
+    discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
+  }
+  toast(`${flagged} stor${flagged===1?'y':'ies'} flagged — rendering them one at a time…`);
+  const r=await runRenderChain();            // arrow keeps spinning through phase B
+  if(!r.err && r.done===0){
+    // The flags landed but the render read didn't see them yet.
+    toast('Flagged rows were not visible yet — press Gen Thumbs in a minute to render them');
+  }
+  discoverBusy=false;
+  if(rb) rb.classList.remove('spinning');
 }
 
 function renderChips(){
@@ -639,7 +718,7 @@ async function rerollStory(story,el){
   }catch(err){
     console.error('reroll failed:',err);
     // The connection dropped, but the render is still finishing server-side.
-    toast('Lost the connection — press ↻ in a minute to see the result');
+    toast('Lost the connection — re-tap the Discovery tab in a minute to see the result');
   }finally{
     stopClock();
     const liveBtn=document.querySelector(`.card[data-url="${cssEsc(url)}"] .reroll-btn`) || btn;
@@ -680,10 +759,14 @@ function bfUpdateTotal(){
   document.getElementById('bf-total').textContent=total+' requested';
   document.getElementById('bf-go').disabled = total<1;
 }
-// The Backfill backend answers as soon as it has planned the work; generation keeps
-// running server-side afterwards. That is the ONE place where the response does not
-// mean "finished". v30 used a 15s poller to cover the gap; v31 does not poll — it
-// tells you to press ↻ when you're ready to look.
+// v35 (pairs with NanoRunway_Backfill_v21): the response now arrives only AFTER
+// the stories are created, appended, and flagged ADD — it means "rows exist",
+// not "accepted". Phase B is the same shared render chain the other two buttons
+// use, so the Backfill button runs truthfully until the last thumbnail is
+// written. Deploy v35 and Backfill v21 TOGETHER: against the old v20 backend
+// (which answers at plan time with {generating}) this reads flagged=0 and
+// correctly does not start the chain.
+let bfBusy=false;
 async function submitBackfill(){
   const requests=[];
   BF_CHANNELS.forEach(c=>{
@@ -691,33 +774,51 @@ async function submitBackfill(){
     if(n>0) requests.push({ category: CAT_MATCH[c]||c, count:n });
   });
   if(!requests.length){ return; }
+  if(bfBusy){ return; }
+  if(genBusy||discoverBusy){ toast('Another run is in progress — wait for it to finish'); return; }
+  bfBusy=true;
   const go=document.getElementById('bf-go');
   const bfBtn=document.getElementById('backfill-btn');
   go.disabled=true; go.classList.add('working'); go.textContent='Working…';
   if(bfBtn) bfBtn.classList.add('spinning');
-  const stopClock=startClock(bfBtn,'Backfilling');
+  const stopClock=startClock(bfBtn,'Creating');
   const summary=requests.map(r=>`${r.count} ${shortCat(r.category)}`).join(', ');
-  toast('Backfilling — '+summary+'…');
+  toast('Creating stories — '+summary+'. Takes about a minute.');
+  let flagged=0;
   try{
     const res=await fetch(BACKFILL_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({requests})});
     const data=await res.json().catch(()=>({}));
-    const generating=(data&&data.generating)||0;
-    closeBackfill();
-    activeView='discovery';
-    await load();                                     // shows any instant pulls
-    toast(generating
-      ? `Accepted — ${generating} generating. Press ↻ in a few minutes to see them.`
-      : 'Backfill accepted. Press ↻ to see the results.');
+    flagged=Number((data&&data.flagged)||0);
   }catch(err){
+    // The connection dropped; creation may still finish server-side, and any rows
+    // it appends carry ADD — a Gen Thumbs press renders them. Never retry.
     console.error('backfill failed:',err);
-    toast('Backfill request failed — retry');
-  }finally{
     stopClock();
     if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.textContent='Backfill'; }
     go.disabled=false; go.classList.remove('working'); go.textContent='Request';
-    bfUpdateTotal();
+    bfUpdateTotal(); bfBusy=false;
+    toast('Lost the connection — in a minute, press Gen Thumbs to render whatever was created');
+    return;
   }
+  stopClock();
+  if(bfBtn){ bfBtn.classList.remove('spinning'); bfBtn.textContent='Backfill'; }
+  go.disabled=false; go.classList.remove('working'); go.textContent='Request';
+  bfUpdateTotal();
+  closeBackfill();
+  activeView='discovery';
+  if(flagged===0){
+    await load();
+    toast('Backfill made no stories — nothing to render');
+    bfBusy=false;
+    return;
+  }
+  toast(`${flagged} stor${flagged===1?'y':'ies'} created — rendering them one at a time…`);
+  const r=await runRenderChain();                     // same chain as Gen Thumbs + circle arrow
+  if(!r.err && r.done===0){
+    toast('Created rows were not visible yet — press Gen Thumbs in a minute to render them');
+  }
+  bfBusy=false;
 }
 
 function shortCat(c){
@@ -759,18 +860,19 @@ let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3200);}
 
-// ---- Gen Thumbs: ONE press = ONE bounded chain of single-row executions. ----
-// Dashboard Reader v18.16 renders exactly ONE ADD row per execution (~60-70s,
+// ---- Shared render chain: ONE bounded chain of single-row executions. ----
+// Dashboard Reader v18.16+ renders exactly ONE ADD row per execution (~60-70s,
 // always inside the 2-minute webhook ceiling) and answers { submitted, remaining }.
 // `Respond Gen Thumbs` is wired after `Write Task + Flip Status` on the loop's DONE
 // output, so each response means: that row is rendered, uploaded to R2, and written
 // to the sheet. We await each response and fire the next request ONLY if the server
 // says remaining > 0. When remaining hits 0 the chain stops dead: one repaint, done.
 // No timers drive this, no request is ever retried, and closing the tab ends the
-// chain immediately. See the v33 addendum in the banner at the top of this script.
+// chain immediately. v34: used by BOTH the Gen Thumbs button and the circle
+// arrow's phase B — the ONLY render driver in the whole system. See the v33/v34
+// addenda in the banner at the top of this script.
 let genBusy=false;
-async function generateThumbnails(){
-  if(genBusy) return;                                 // a second tap does nothing
+async function runRenderChain(){
   const btn=document.getElementById('genthumb-btn');
   const original='Gen Thumbs';
   genBusy=true;
@@ -778,12 +880,12 @@ async function generateThumbnails(){
   let done=0;                                         // rows confirmed rendered+written
   let total=0;                                        // done + remaining, learned from the first response
   const stopClock=startClock(btn, ()=> total>0 ? `Rendering ${Math.min(done+1,total)}/${total}` : 'Rendering…');
-  toast('Rendering — about a minute per story. Leave the page open.');
   // Safety backstop only. The real bound is the server's `remaining` count, which
-  // can never exceed the rows YOU marked ADD. This cap just guarantees the chain
-  // is finite even if a future workflow bug reported `remaining` wrong forever.
+  // can never exceed the rows marked ADD. This cap just guarantees the chain is
+  // finite even if a future workflow bug reported `remaining` wrong forever.
   const GEN_HARD_CAP=20;
   let err=null;
+  let lastRemaining=0;                                // >0 after the loop = cap exit
   try{
     for(let i=0;i<GEN_HARD_CAP;i++){
       const res=await fetch(GEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -791,17 +893,15 @@ async function generateThumbnails(){
       const data=await res.json().catch(()=>({}));
       const n=(data&&typeof data.submitted==='number')?data.submitted:0;
       const remaining=(data&&typeof data.remaining==='number')?data.remaining:0;
-      if(n===0){                                      // nothing (left) marked ADD
-        if(done===0) toast('No rows marked ADD — nothing to render');
-        break;
-      }
+      if(n===0){ lastRemaining=0; break; }            // nothing (left) marked ADD
       done+=n;
       total=done+remaining;
+      lastRemaining=remaining;
       if(remaining<=0) break;                         // last row written — chain stops dead
       toast(`${done} of ${total} rendered — next one starting…`);
     }
   }catch(e){
-    console.error('gen-thumb chain stopped:',e);
+    console.error('render chain stopped:',e);
     err=e;
   }
   stopClock();
@@ -810,25 +910,40 @@ async function generateThumbnails(){
   if(err){
     // The connection dropped mid-chain. The in-flight row is still finishing
     // server-side; every un-rendered row keeps its ADD flag. Do NOT retry — that
-    // would double the spend. Press ↻ in a minute, then Gen Thumbs to resume.
+    // would double the spend. Rendering resumes on the next Gen Thumbs press.
     btn.textContent=original;
     toast(done>0
-      ? `Lost the connection after ${done} — press ↻ in a minute, then Gen Thumbs to finish the rest`
-      : 'Lost the connection — the render may still be finishing. Press ↻ in a minute.');
-    return;
+      ? `Lost the connection after ${done} — in a minute, press Gen Thumbs to finish the rest`
+      : 'Lost the connection — the render may still be finishing. Re-tap the Discovery tab in a minute to reload.');
+    return {done, err};
   }
   if(done>0){
     await load();                                     // single repaint, pure read
-    toast(`Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
-    btn.textContent='Done ✓';
+    // Cap exit: the per-press backstop (GEN_HARD_CAP) stopped the chain with rows
+    // still flagged — say so instead of claiming completion. One more Gen Thumbs
+    // press resumes exactly where this one stopped.
+    toast(lastRemaining>0
+      ? `${done} rendered — ${lastRemaining} still flagged. Press Gen Thumbs to continue.`
+      : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
+    btn.textContent = lastRemaining>0 ? original : 'Done ✓';
     setTimeout(()=>{ if(btn.textContent==='Done ✓') btn.textContent=original; },2500);
   }else{
     btn.textContent=original;
   }
+  return {done, err:null};
+}
+async function generateThumbnails(){
+  if(genBusy||discoverBusy||bfBusy) return;           // a second tap does nothing
+  toast('Rendering — about a minute per story. Leave the page open.');
+  const r=await runRenderChain();
+  if(!r.err && r.done===0) toast('No rows marked ADD — nothing to render');
 }
 
 // bottom nav + source toggles
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{activeView=t.dataset.view;render();});
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  if(t.dataset.view===activeView){ reloadFeed(); return; }   // v34: re-tap the active tab = pure feed reload
+  activeView=t.dataset.view;render();
+});
 document.querySelectorAll('.src').forEach(c=>c.onchange=render);
 
 // Initial paint. This is a pure read (?poll=1) — opening the page starts no work.
