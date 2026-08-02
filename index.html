@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.2';
+    var BUILD = '36.3';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.2">
-<link rel="apple-touch-icon" href="favicon.png?v=36.2">
+<link rel="icon" type="image/png" href="favicon.png?v=36.3">
+<link rel="apple-touch-icon" href="favicon.png?v=36.3">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.2</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.3</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -365,6 +365,25 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // done (flagged recorded by Finish Run); a different run_id (3 checks in a
 // row, to absorb read lag) ⇒ say so and stop. DEPLOY WITH v18.20 and do the
 // one-time Sheet2 setup (see the workflow sticky).
+//
+// ── v36.3 ADDENDUM — TELL THE SERVER THE FLAGS ARE FRESH ────────────────────
+// One press rendered 1 of 10. Cause: the Dashboard Reader's `Settle Sheet
+// Write` node (v18.5) pauses 6s before reading ADD flags — because Google
+// Sheets doesn't make a write visible to an immediate read, and an unsettled
+// read was catching only 1-3 of 10 fresh flags. But it only settles when the
+// POST says source:'discovery_refresh' — which the DELETED server-side
+// self-POST used to send. The browser chain sent a plain {action:'gen_thumbs'}
+// and read straight through the propagation lag: submitted 1, remaining 0,
+// honest-but-blind, chain over.
+// Fix, browser-side only (no workflow change): when the chain follows a
+// flag-producing phase (circle arrow / Backfill), its FIRST request carries
+// { source:'discovery_refresh', picked:N } so the server settles 6s before
+// reading — exactly the path v18.5 built. And if the server still reports
+// remaining:0 while done < picked, the chain makes ONE 5s-paused follow-up
+// request (also settled) before believing it; a follow-up that finds nothing
+// ends the chain with an honest "X of N — press Gen Thumbs to finish" toast.
+// Bounded as ever: the same GEN_HARD_CAP, no retries of failures, dies with
+// the tab. Rows the read never sees keep their ADD flag — nothing is lost.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -543,7 +562,7 @@ async function refreshTap(){
     discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
   }
   toast(`${flagged} stor${flagged===1?'y':'ies'} flagged — rendering them one at a time…`);
-  const r=await runRenderChain();            // arrow keeps spinning through phase B
+  const r=await runRenderChain(flagged);     // arrow keeps spinning through phase B
   if(!r.err && r.done===0){
     // The flags landed but the render read didn't see them yet.
     toast('Flagged rows were not visible yet — press Gen Thumbs in a minute to render them');
@@ -911,7 +930,7 @@ async function submitBackfill(){
     return;
   }
   toast(`${flagged} stor${flagged===1?'y':'ies'} created — rendering them one at a time…`);
-  const r=await runRenderChain();                     // same chain as Gen Thumbs + circle arrow
+  const r=await runRenderChain(flagged);              // same chain as Gen Thumbs + circle arrow
   if(!r.err && r.done===0){
     toast('Created rows were not visible yet — press Gen Thumbs in a minute to render them');
   }
@@ -969,7 +988,8 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 // arrow's phase B — the ONLY render driver in the whole system. See the v33/v34
 // addenda in the banner at the top of this script.
 let genBusy=false;
-async function runRenderChain(){
+async function runRenderChain(expected){
+  expected=Number(expected||0);      // flags just written by phase A (0 = manual press, no settle needed)
   const btn=document.getElementById('genthumb-btn');
   const original='Gen Thumbs';
   genBusy=true;
@@ -983,18 +1003,35 @@ async function runRenderChain(){
   const GEN_HARD_CAP=20;
   let err=null;
   let lastRemaining=0;                                // >0 after the loop = cap exit
+  // v36.3: when the flags were written seconds ago, tell the server so its
+  // Settle Sheet Write pauses 6s before the read (the v18.5 propagation fix).
+  let settleNext = expected>0;
+  let graceUsed=false;                                // one follow-up look, max
   try{
     for(let i=0;i<GEN_HARD_CAP;i++){
+      const body={action:'gen_thumbs'};
+      if(settleNext){ body.source='discovery_refresh'; body.picked=expected; settleNext=false; }
       const res=await fetch(GEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'gen_thumbs'})});
+        body:JSON.stringify(body)});
       const data=await res.json().catch(()=>({}));
       const n=(data&&typeof data.submitted==='number')?data.submitted:0;
       const remaining=(data&&typeof data.remaining==='number')?data.remaining:0;
       if(n===0){ lastRemaining=0; break; }            // nothing (left) marked ADD
       done+=n;
-      total=done+remaining;
+      total=Math.max(done+remaining, expected);
       lastRemaining=remaining;
-      if(remaining<=0) break;                         // last row written — chain stops dead
+      if(remaining<=0){
+        // Server sees no more ADD rows. If phase A said there should be more,
+        // give the sheet one settled second look before believing it — a
+        // single bounded follow-up request, not a retry of anything.
+        if(expected>done && !graceUsed){
+          graceUsed=true; settleNext=true;
+          toast(`${done} rendered — double-checking for ${expected-done} more that may not be visible yet…`);
+          await new Promise(r=>setTimeout(r,5000));
+          continue;
+        }
+        break;                                        // last row written — chain stops dead
+      }
       toast(`${done} of ${total} rendered — next one starting…`);
     }
   }catch(e){
@@ -1019,10 +1056,13 @@ async function runRenderChain(){
     // Cap exit: the per-press backstop (GEN_HARD_CAP) stopped the chain with rows
     // still flagged — say so instead of claiming completion. One more Gen Thumbs
     // press resumes exactly where this one stopped.
+    const short = (expected>done && lastRemaining<=0);
     toast(lastRemaining>0
       ? `${done} rendered — ${lastRemaining} still flagged. Press Gen Thumbs to continue.`
-      : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
-    btn.textContent = lastRemaining>0 ? original : 'Done ✓';
+      : short
+        ? `${done} of ${expected} rendered — the rest keep their ADD flag. Press Gen Thumbs to finish.`
+        : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
+    btn.textContent = (lastRemaining>0 || short) ? original : 'Done ✓';
     setTimeout(()=>{ if(btn.textContent==='Done ✓') btn.textContent=original; },2500);
   }else{
     btn.textContent=original;
