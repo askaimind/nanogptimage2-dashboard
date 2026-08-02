@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.1';
+    var BUILD = '36.2';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.1">
-<link rel="apple-touch-icon" href="favicon.png?v=36.1">
+<link rel="icon" type="image/png" href="favicon.png?v=36.2">
+<link rel="apple-touch-icon" href="favicon.png?v=36.2">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.1</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.2</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -351,6 +351,20 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // guess. DEPLOY WITH Dashboard Reader v18.19: against v18.18 this page still
 // works (start answers late → the old ceiling-timeout fallback), but v35
 // against v18.19 wrongly reports an empty scrape — pair the deploys.
+//
+// ── v36.2 ADDENDUM — THE RUN STATE LIVES IN THE SHEET NOW ───────────────────
+// v36.1 + Dashboard Reader v18.19 kept the run lock in n8n workflow static
+// data — which n8n only persists when an execution FINISHES. So while the
+// scrape execution was still running, the status endpoint (a separate
+// execution) read the STALE pre-run copy: idle, previous run_id. The watch
+// loop's very first check then wrongly declared the run dead and stopped the
+// arrow ~10s in — every press. Dashboard Reader v18.20 moves the lock + result
+// into the sheet (tab Sheet2, row lock_key=RUN), where writes are visible to
+// every reader instantly. New status contract: { running, run_id, flagged }.
+// watchDiscoverRun now: running+our run_id ⇒ keep spinning; idle+our run_id ⇒
+// done (flagged recorded by Finish Run); a different run_id (3 checks in a
+// row, to absorb read lag) ⇒ say so and stop. DEPLOY WITH v18.20 and do the
+// one-time Sheet2 setup (see the workflow sticky).
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -545,29 +559,34 @@ async function refreshTap(){
 // stops dead at 8 minutes, and closing the tab kills it instantly.
 async function watchDiscoverRun(runId){
   const t0=Date.now();
-  const MAX_MS=8*60*1000;    // hard stop (cycle ~3.5-4 min; stale lock releases at 6)
+  const MAX_MS=8*60*1000;    // hard stop (cycle ~3.5-4 min; stale lock treated idle at 6)
   const EVERY_MS=10000;      // ≤48 status reads per press, then silence
   let lastToastMin=0;
+  let mismatches=0;          // consecutive polls showing a different run_id
   while(Date.now()-t0 < MAX_MS){
     await new Promise(r=>setTimeout(r,EVERY_MS));
     let st=null;
     try{ const res=await fetch(STATUS_URL); st=await res.json(); }
     catch(_){ continue; }    // one missed read is fine — the loop stays time-bounded
     if(!st) continue;
+    const sameRun = String(st.run_id||'')===runId;
+    if(!sameRun){
+      // The lock row shows a different run. One stale read can happen right at
+      // the start; three in a row means our run was replaced or never wrote.
+      if(++mismatches>=3){
+        toast('The scrape stopped without finishing — check the n8n Executions list, then press Gen Thumbs to render anything it flagged');
+        return {outcome:'failed'};
+      }
+      continue;
+    }
+    mismatches=0;
     if(st.running){
       const m=Math.floor((Date.now()-t0)/60000);
       if(m>lastToastMin){ lastToastMin=m; toast('Still scraping — '+m+' min in. Leave the page open.'); }
       continue;
     }
-    // Idle. Did OUR run record a result?
-    if(String(st.last_run_id||'')===runId){
-      return {outcome:'done', flagged:Number(st.last_run_flagged||0)};
-    }
-    // Idle with no result from our run: it died mid-flight and its lock was
-    // stale-released. Nothing is running anywhere; any flags it managed to
-    // write are safely renderable via Gen Thumbs. Say so — never guess.
-    toast('The scrape stopped without finishing — check the n8n Executions list, then press Gen Thumbs to render anything it flagged');
-    return {outcome:'failed'};
+    // Idle under OUR run_id: Finish Run wrote the result. flagged is the count.
+    return {outcome:'done', flagged:Number(st.flagged||0)};
   }
   toast('The scrape is taking unusually long — in a few minutes, press Gen Thumbs to render what it found');
   return {outcome:'timeout'};
