@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '35';
+    var BUILD = '36.1';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=35">
-<link rel="apple-touch-icon" href="favicon.png?v=35">
+<link rel="icon" type="image/png" href="favicon.png?v=36.1">
+<link rel="apple-touch-icon" href="favicon.png?v=36.1">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v35</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.1</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
