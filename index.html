@@ -325,6 +325,32 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // three buttons now share one render path, one progress display, one resume
 // story (un-rendered rows keep ADD; Gen Thumbs continues them), and one
 // guarantee: when the animation stops, nothing is running anywhere.
+//
+// ── v36 ADDENDUM — THE CIRCLE ARROW IS ONE PRESS, START TO CARDS ────────────
+// The full discovery cycle (~3.5 min) can NEVER finish inside the ~2-min
+// connection ceiling, so v35's wait-for-{flagged} died on every press and the
+// "press Gen Thumbs in a minute" toast was the NORMAL path, not the fallback.
+// Fixed with the same principle as the render chain: never hold a connection
+// open past the ceiling — the open tab drives the work.
+//   PHASE A: POST to START_URL now answers { status:'started', run_id }
+//     INSTANTLY (Dashboard Reader v18.19 responds at lock time, then keeps
+//     executing the one bounded scrape cycle server-side).
+//   PHASE A-WATCH: while the arrow spins, watchDiscoverRun() reads STATUS_URL
+//     every 10s. That endpoint is a pure read of the run lock — its own code
+//     says "never starts anything": no scrape, no sheet touch, no YouTube
+//     quota. This is a BOUNDED wait on work YOU started, not a background
+//     poller: it exists only between your press and the scrape finishing,
+//     stops at 8 minutes no matter what, and dies instantly with the tab
+//     (the in-flight execution finishes its one cycle and stops — same as
+//     today). When status flips idle WITH this press's run_id recorded, the
+//     browser reads { flagged } and rolls straight into…
+//   PHASE B: the shared runRenderChain — unchanged, identical for all three
+//     buttons. One press: spin ~3.5 min, "Rendering 1/N…N/N", one repaint.
+// Honest failure: a run that dies server-side stale-releases its lock (6 min)
+// WITHOUT recording a result — idle + no matching run_id ⇒ we say so, never
+// guess. DEPLOY WITH Dashboard Reader v18.19: against v18.18 this page still
+// works (start answers late → the old ceiling-timeout fallback), but v35
+// against v18.19 wrongly reports an empty scrape — pair the deploys.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -338,6 +364,9 @@ const BACKFILL_URL = 'https://askai.app.n8n.cloud/webhook/nano-backfill';
 // append -> flag top 10, answered only when flagging is complete (run-locked
 // server-side, 409 already_running on a second press).
 const START_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-start';
+// v36: read-only status of the discovery run lock (Dashboard Reader's
+// nano-dashboard-status chain — reads static data, starts NOTHING, no quota).
+const STATUS_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-status';
 
 // 10 canonical categories (chip labels are short; match against full Channel Category)
 const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel'];
@@ -448,12 +477,13 @@ async function reloadFeed(){
 }
 
 // ---- Circle arrow: ONE full discovery cycle per press. ----
-// Phase A: one bounded request — scrape, score, append, flag top 10 — answered
-// only when flagging is done (server run lock rejects overlapping presses).
+// Phase A: one request that answers { started, run_id } at lock time; the one
+// bounded scrape cycle continues server-side. Phase A-watch: bounded 10s
+// status reads (pure, read-only) until THIS run's result is recorded.
 // Phase B: the shared Gen Thumbs render chain, one row per execution.
-// The arrow spins through BOTH phases and stops when the last row is written.
-// No timers, no retries; closing the tab ends everything after the in-flight
-// execution. See the v34 addendum in the banner above.
+// The arrow spins through ALL of it and stops when the last row is written.
+// No retries; closing the tab ends everything after the in-flight execution.
+// See the v36 addendum in the banner above.
 let discoverBusy=false;
 async function refreshTap(){
   if(discoverBusy){ toast('A discovery run is already in progress'); return; }
@@ -461,7 +491,7 @@ async function refreshTap(){
   const rb=document.getElementById('refresh-btn');
   discoverBusy=true;
   if(rb) rb.classList.add('spinning');
-  toast('Finding new stories — the scrape takes a minute or two. Leave the page open.');
+  toast('Finding new stories — the scrape takes 3-4 minutes. Leave the page open.');
   let flagged=0;
   try{
     const res=await fetch(START_URL,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -471,11 +501,24 @@ async function refreshTap(){
       toast('A discovery run is already going on the server — try again in a minute');
       discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
     }
-    flagged=Number((data && data.flagged) || 0);
+    if(data && data.status==='started' && data.run_id){
+      // Dashboard Reader v18.19: answered at lock time. The scrape is running
+      // server-side as ONE bounded execution — watch it, don't hold a doomed
+      // connection open through the ceiling.
+      const w=await watchDiscoverRun(String(data.run_id));
+      if(w.outcome!=='done'){
+        discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
+      }
+      flagged=w.flagged;
+    } else {
+      // Dashboard Reader v18.18 shape: the server only answers { flagged } after
+      // the whole cycle — which only arrives if the run beat the ceiling.
+      flagged=Number((data && data.flagged) || 0);
+    }
   }catch(err){
-    // The scrape outlived the ~2-min connection ceiling. It is still finishing
-    // server-side and will flag its rows when done; NOTHING further starts on
-    // its own. Do not retry — press Gen Thumbs in a minute to render the rows.
+    // Old-workflow path only (v18.19 answers instantly): the connection died at
+    // the ~2-min ceiling. The scrape is still finishing server-side and will
+    // flag its rows; NOTHING further starts on its own. Do not retry.
     console.error('discover phase failed/timed out:',err);
     toast('The scrape is taking longer than the connection allows — in a minute, press Gen Thumbs to render what it found');
     discoverBusy=false; if(rb) rb.classList.remove('spinning'); return;
@@ -493,6 +536,41 @@ async function refreshTap(){
   }
   discoverBusy=false;
   if(rb) rb.classList.remove('spinning');
+}
+
+// Watch a started discovery run to completion. A BOUNDED wait on work YOU
+// started, not a background poller: it exists only while the arrow spins,
+// each check is one GET to STATUS_URL (a read of the run lock that — per its
+// own code — never starts anything, touches no sheet, costs no quota), it
+// stops dead at 8 minutes, and closing the tab kills it instantly.
+async function watchDiscoverRun(runId){
+  const t0=Date.now();
+  const MAX_MS=8*60*1000;    // hard stop (cycle ~3.5-4 min; stale lock releases at 6)
+  const EVERY_MS=10000;      // ≤48 status reads per press, then silence
+  let lastToastMin=0;
+  while(Date.now()-t0 < MAX_MS){
+    await new Promise(r=>setTimeout(r,EVERY_MS));
+    let st=null;
+    try{ const res=await fetch(STATUS_URL); st=await res.json(); }
+    catch(_){ continue; }    // one missed read is fine — the loop stays time-bounded
+    if(!st) continue;
+    if(st.running){
+      const m=Math.floor((Date.now()-t0)/60000);
+      if(m>lastToastMin){ lastToastMin=m; toast('Still scraping — '+m+' min in. Leave the page open.'); }
+      continue;
+    }
+    // Idle. Did OUR run record a result?
+    if(String(st.last_run_id||'')===runId){
+      return {outcome:'done', flagged:Number(st.last_run_flagged||0)};
+    }
+    // Idle with no result from our run: it died mid-flight and its lock was
+    // stale-released. Nothing is running anywhere; any flags it managed to
+    // write are safely renderable via Gen Thumbs. Say so — never guess.
+    toast('The scrape stopped without finishing — check the n8n Executions list, then press Gen Thumbs to render anything it flagged');
+    return {outcome:'failed'};
+  }
+  toast('The scrape is taking unusually long — in a few minutes, press Gen Thumbs to render what it found');
+  return {outcome:'timeout'};
 }
 
 function renderChips(){
