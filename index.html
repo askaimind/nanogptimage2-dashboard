@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.4';
+    var BUILD = '36.5';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.4">
-<link rel="apple-touch-icon" href="favicon.png?v=36.4">
+<link rel="icon" type="image/png" href="favicon.png?v=36.5">
+<link rel="apple-touch-icon" href="favicon.png?v=36.5">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.4</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.5</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -417,8 +417,23 @@ let activeView='discovery';
 // card's URL. Purge any localActs on load for build v28 so no ghost survives the
 // cache swap; the sheet is the source of truth and will repaint correct state.
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
-if(localStorage.getItem('nano_build')!=='v28'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v28');}catch(_){} }
+if(localStorage.getItem('nano_build')!=='v29'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v29');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
+
+// ── v36.5: WHEN THE LAST SHEET READ HAPPENED ─────────────────────────────
+// effStatus needs to know whether the `status` on a card is OLDER or NEWER
+// than the tap sitting in localActs. Without this the local bridge below is
+// unreachable and Deploy cannot move a card. Set at the end of every load().
+let lastLoadAt = 0;
+
+// Local actions are now { a: <action>, ts: <when tapped> }. Old builds stored a
+// bare string, so read through this shim rather than indexing localActs directly.
+function actOf(url){
+  const v = localActs[url];
+  if(!v) return null;
+  return (typeof v === 'string') ? { a: v, ts: 0 } : v;
+}
+const ACT_TTL_MS = 30 * 60 * 1000;   // a tap the sheet never confirmed goes stale after 30 min
 
 const SHEET_ACTIONS = new Set(['selected','hold','skip']);
 // The workflow sets Status='scored' on EXACTLY the rows you re-request via Gen Thumbs
@@ -430,21 +445,36 @@ const SHEET_RETURNS_TO_DISCOVERY = new Set(['scored','ready_for_idea_generation'
 // as a brief optimistic bridge: it makes a card move the instant you tap, before the
 // sheet round-trip completes — but the sheet always wins once it has a definitive value.
 const effStatus = s => {
-  // 1) Sheet has a definitive triage action → it wins. This is authoritative and
-  //    cross-device. Clear any local bridge entry; the sheet now carries the truth.
+  const act = actOf(s.source_url);
+
+  // 1) Sheet has a definitive triage action → it wins. Authoritative and
+  //    cross-device. Clear any local bridge entry; the sheet carries the truth.
   if(SHEET_ACTIONS.has(s.status)){
     if(localActs[s.source_url]) { delete localActs[s.source_url]; saveActs(); }
     return s.status;
   }
-  // 2) Fresh re-request (scored/return) → Discovery. Clear any stale local action.
+
+  // 2) v36.5 BUG FIX — this rule used to run before the local bridge and delete
+  //    the tap outright. EVERY deployable card carries status 'scored', so the
+  //    bridge at (3) was unreachable and a Deploy never moved a card: it just
+  //    collapsed and stayed in Discovery. A 'scored' reading only overrules a tap
+  //    when the sheet data is NEWER than the tap — i.e. a load ran after it and
+  //    still reports 'scored' (the deliberate Gen Thumbs / Reroll return signal).
   if(SHEET_RETURNS_TO_DISCOVERY.has(s.status)){
-    if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
-    return 'scored';
+    const bridgeIsFresh = act && act.ts > lastLoadAt && (Date.now() - act.ts) < ACT_TTL_MS;
+    if(!bridgeIsFresh){
+      if(localActs[s.source_url]){ delete localActs[s.source_url]; saveActs(); }
+      return 'scored';
+    }
+    return act.a === 'select' ? 'selected' : act.a;
   }
-  // 3) No definitive sheet value yet → fall back to the optimistic local bridge
-  //    (covers the brief window between tapping and the sheet write landing).
-  const a = localActs[s.source_url];
-  return a ? (a==='select'?'selected':a) : (s.status||'scored');
+
+  // 3) No definitive sheet value yet → optimistic local bridge (covers the window
+  //    between tapping and the sheet write landing).
+  if(act && (Date.now() - act.ts) < ACT_TTL_MS){
+    return act.a === 'select' ? 'selected' : act.a;
+  }
+  return s.status || 'scored';
 };
 
 // ── v28: DISPLAY-SIDE SOURCE-SUFFIX STRIP ────────────────────────────────
@@ -491,6 +521,7 @@ async function load(){
     return false;
   }
   if(rb) rb.classList.remove('spinning');
+  lastLoadAt = Date.now();   // v36.5: any tap older than this is now the sheet's business
   renderChips();
   render();
   return true;
@@ -796,16 +827,43 @@ function trimText(t){
 // ---- action POST (unchanged contract: action, source_url, story) ----
 async function sendAction(action,story,el){
   const url=story.source_url;
-  localActs[url]=action; saveActs();
+  if(!url){ toast('This card has no Source URL — it cannot be deployed'); return; }
+
+  // v36.5: guard the double tap. Deploy appends a WINNER row and starts a script
+  // run, and a second press used to append a second one (four duplicate rows on
+  // 2026-06-16 came from exactly this).
+  if(el.dataset.busy==='1') return;
+  el.dataset.busy='1';
+  el.querySelectorAll('.abtn').forEach(b=>b.disabled=true);
+
+  localActs[url]={ a:action, ts:Date.now() }; saveActs();
   el.dataset.eff = action==='select'?'selected':action;
-  toast(action==='select'?'Deployed →':action==='hold'?'On hold':'Skipped');
   el.classList.remove('open');
+  render();                                    // move it out of Discovery immediately
+  toast(action==='select'?'Deploying — writing to WINNER…':action==='hold'?'On hold':'Skipped');
+
   try{
-    await fetch(ACT_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+    const res = await fetch(ACT_URL,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action,source_url:url,story})});
-  }catch(_){}
-  // if we're in a filtered view, re-render so the card moves to its bucket
-  setTimeout(render,260);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    // Reader v18.23 responds AFTER Update Status writes the sheet, so a reload now
+    // returns the real status and the card lands in its tab on the sheet's authority,
+    // not on localStorage's. On an older Reader this reload is harmless: the bridge
+    // is still fresher than the load and holds the card in Deployed for the session.
+    if(action==='select'){
+      await load();
+      toast('Deployed ✓ — check n8n Executions for the script run');
+    }
+  }catch(err){
+    console.error('action failed:',err);
+    toast('Deploy failed to reach the pipeline — the card was NOT written');
+    delete localActs[url]; saveActs();          // do not fake a success
+    el.dataset.eff = story.status || 'scored';
+    render();
+  }finally{
+    el.dataset.busy='0';
+    el.querySelectorAll('.abtn').forEach(b=>b.disabled=false);
+  }
 }
 
 // ---- Reroll: one press, one run, one repaint. ----
