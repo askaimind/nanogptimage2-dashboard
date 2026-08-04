@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.5';
+    var BUILD = '36.6';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.5">
-<link rel="apple-touch-icon" href="favicon.png?v=36.5">
+<link rel="icon" type="image/png" href="favicon.png?v=36.6">
+<link rel="apple-touch-icon" href="favicon.png?v=36.6">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.5</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.6</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -875,6 +875,7 @@ async function rerollStory(story,el){
   if(!url){ toast('Reroll: missing source URL'); return; }
   const btn=el.querySelector('.reroll-btn');
   if(btn && btn.disabled) return;                     // guard against a double tap
+  const prevThumb = story.thumbnail_url || '';        // v36.6: what the card shows now
   if(btn){ btn.disabled=true; btn.classList.add('spinning'); }
   const stopClock=startClock(btn,'⟳ Rerolling');
   toast('Rerolling — this takes a minute or two. Leave the page open.');
@@ -888,7 +889,26 @@ async function rerollStory(story,el){
     if(localActs[url]){ delete localActs[url]; saveActs(); }
     activeView='discovery';
     await load();                                     // single repaint, pure read
-    toast(cat?(changed?`Reroll done — recategorized to ${shortCat(cat)}`:`Reroll done — ${shortCat(cat)}`):'Reroll done ✓');
+
+    // v36.6: SETTLE GRACE LOOKS. The reroll writes the new Thumbnail URL and only
+    // then responds, but Google Sheets can still serve the PREVIOUS value to a read
+    // issued a second later — so the repaint above painted the old art and you had
+    // to refresh by hand. Take up to two bounded re-reads, spaced, and stop as soon
+    // as the row's thumbnail actually changes. Not a poller: fixed count, no
+    // recursion, dies with the tab.
+    const thumbOf = () => {
+      const s = allStories.find(x => (x.source_url||'') === url);
+      return s ? (s.thumbnail_url||'') : '';
+    };
+    if(thumbOf() === prevThumb){
+      for(const waitMs of [4000, 6000]){
+        await new Promise(r => setTimeout(r, waitMs));
+        await load();
+        if(thumbOf() !== prevThumb) break;
+      }
+    }
+    const settled = thumbOf() !== prevThumb;
+    toast(cat?(changed?`Reroll done — recategorized to ${shortCat(cat)}`:`Reroll done — ${shortCat(cat)}`):(settled?'Reroll done ✓':'Reroll done — new art still landing, tap the refresh arrow in a moment'));
   }catch(err){
     console.error('reroll failed:',err);
     // The connection dropped, but the render is still finishing server-side.
