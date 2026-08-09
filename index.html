@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.7';
+    var BUILD = '36.8';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.7">
-<link rel="apple-touch-icon" href="favicon.png?v=36.7">
+<link rel="icon" type="image/png" href="favicon.png?v=36.8">
+<link rel="apple-touch-icon" href="favicon.png?v=36.8">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.7</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.8</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -401,11 +401,19 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // by that time first, and in those views the NEW pill follows it too.
 // Cards with no local record (deployed on another device, or before this build)
 // fall back to exactly the old order, so nothing regresses.
-// HONEST LIMIT: this is per-device. The durable cross-device fix is a
-// `date_deployed` stamp written by Dashboard Reader's Update Status node and
-// returned in the feed — once that exists, prefer it here and keep this as the
-// fallback. Adds no network call, no timer, and starts no work: the v31 rule
-// is untouched.
+// Adds no network call, no timer, and starts no work: the v31 rule is untouched.
+//
+// ── v36.8 ADDENDUM — THE SHEET CARRIES IT NOW, SO IT WORKS EVERYWHERE ───────
+// v36.7's ordering was per-device: deploy on the desktop, look on the phone,
+// and that card fell back to the old date_added order. Dashboard Reader v18.27
+// closes it — `Update Status` writes an `Action Date` on every Deploy / Hold /
+// Skip, and `Format Stories` returns it as `action_date`. `actTimeOf()` prefers
+// that value and drops to the localStorage map only when it is absent, which
+// covers two real cases: rows actioned before v18.27 (blank cell), and the
+// seconds between your tap and the sheet write landing.
+// PAIR THE DEPLOYS: this page against the older v18.26 simply never sees an
+// `action_date` and behaves exactly like v36.7, so it is safe either way.
+// REQUIRES the one-time header: Discovery tab, cell AK1 = `Action Date`.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -459,6 +467,20 @@ function pruneActTimes(){
 }
 function stampAct(url){ if(!url) return; actTimes[url]=Date.now(); pruneActTimes(); saveActTimes(); }
 function actTime(url){ return (+actTimes[url]) || 0; }
+
+// v36.8: THE SHEET NOW CARRIES THE ACTION TIME. Dashboard Reader v18.27's
+// Update Status writes an `Action Date` on every Deploy / Hold / Skip and
+// Format Stories returns it as `action_date`, so ordering finally works on
+// EVERY device instead of only the one you tapped on. The localStorage map
+// above stays as the fallback: it covers rows actioned before v18.27 (blank
+// cell) and the seconds between your tap and the sheet write landing.
+function sheetActTime(s){
+  const v = s && s.action_date;
+  if(!v) return 0;
+  const t = new Date(v).getTime();
+  return isNaN(t) ? 0 : t;
+}
+function actTimeOf(s){ return sheetActTime(s) || actTime(s && s.source_url); }
 
 // ── v36.5: WHEN THE LAST SHEET READ HAPPENED ─────────────────────────────
 // effStatus needs to know whether the `status` on a card is OLDER or NEWER
@@ -746,7 +768,7 @@ function isNew(s){ const t=renderedAt(s); return t>0 && (Date.now()-t) < NEW_WIN
 // unchanged: there, new genuinely means freshly rendered art.
 function isNewInView(s){
   if(activeView==='discovery') return isNew(s);
-  const t=actTime(s && s.source_url);
+  const t=actTimeOf(s);                      // v36.8: sheet first, local record as fallback
   return t>0 && (Date.now()-t) < NEW_WINDOW_MS;
 }
 
@@ -773,7 +795,7 @@ function render(){
   // so deploying a week-old find buried it a week down the list. Sort by your tap
   // first; anything with no local record (another device, or pre-v36.7) falls
   // through to the old date_added / row_number order, exactly as before.
-  const at=s=>actTime(s && s.source_url);
+  const at=s=>actTimeOf(s);                  // v36.8: sheet `action_date` first, local record as fallback
   if(activeView==='discovery') list.sort((a,b)=> (renderedAt(b)-renderedAt(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   else                         list.sort((a,b)=> (at(b)-at(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   // bottom-nav active state
