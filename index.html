@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.6';
+    var BUILD = '36.7';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.6">
-<link rel="apple-touch-icon" href="favicon.png?v=36.6">
+<link rel="icon" type="image/png" href="favicon.png?v=36.7">
+<link rel="apple-touch-icon" href="favicon.png?v=36.7">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.6</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.7</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -384,6 +384,28 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // ends the chain with an honest "X of N — press Gen Thumbs to finish" toast.
 // Bounded as ever: the same GEN_HARD_CAP, no retries of failures, dies with
 // the tab. Rows the read never sees keep their ADD flag — nothing is lost.
+//
+// ── v36.7 ADDENDUM — NEWLY DEPLOYED CARDS SORT TO THE TOP ───────────────────
+// Symptom: a card deployed tonight sat BELOW one deployed days ago, and the
+// NEW pill sat on the wrong card.
+// Cause: Deployed / On Hold / Skipped all sorted by `date_added`, which is when
+// the story was DISCOVERED, not when you acted on it. Deploying a 7-day-old
+// find therefore parked it 7 days down the list. The NEW pill had the matching
+// problem — it reads the render timestamp baked into the R2 thumbnail filename,
+// which is about the ART, not about your tap.
+// Fix: `nano_act_times` — one localStorage map of source_url -> the moment you
+// tapped Deploy / Hold / Skip. Written in sendAction, capped at 400 entries
+// (newest kept), and DELIBERATELY not deleted by effStatus. That matters: the
+// existing `localActs` bridge is wiped the instant the sheet confirms an
+// action, so it could never have carried this. The three action views now sort
+// by that time first, and in those views the NEW pill follows it too.
+// Cards with no local record (deployed on another device, or before this build)
+// fall back to exactly the old order, so nothing regresses.
+// HONEST LIMIT: this is per-device. The durable cross-device fix is a
+// `date_deployed` stamp written by Dashboard Reader's Update Status node and
+// returned in the feed — once that exists, prefer it here and keep this as the
+// fallback. Adds no network call, no timer, and starts no work: the v31 rule
+// is untouched.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
@@ -419,6 +441,24 @@ let activeView='discovery';
 let localActs = JSON.parse(localStorage.getItem('nano_acts')||'{}');
 if(localStorage.getItem('nano_build')!=='v29'){ localActs={}; try{localStorage.setItem('nano_acts','{}');localStorage.setItem('nano_build','v29');}catch(_){} }
 function saveActs(){ try{localStorage.setItem('nano_acts',JSON.stringify(localActs));}catch(_){} }
+
+// ── v36.7: WHEN YOU TAPPED DEPLOY / HOLD / SKIP ──────────────────────────
+// Separate from localActs on purpose. localActs is the optimistic bridge and is
+// DELETED the moment the sheet confirms an action, so it cannot carry ordering.
+// This map is never deleted by effStatus — it only ages out by size cap. Pure
+// localStorage bookkeeping: no network call, no timer, starts nothing.
+let actTimes = {};
+try{ actTimes = JSON.parse(localStorage.getItem('nano_act_times')||'{}'); }catch(_){ actTimes = {}; }
+const ACT_TIMES_CAP = 400;
+function saveActTimes(){ try{localStorage.setItem('nano_act_times',JSON.stringify(actTimes));}catch(_){} }
+function pruneActTimes(){
+  const keys=Object.keys(actTimes);
+  if(keys.length<=ACT_TIMES_CAP) return;
+  keys.sort((a,b)=>(+actTimes[b]||0)-(+actTimes[a]||0));       // newest first
+  keys.slice(ACT_TIMES_CAP).forEach(k=>{ delete actTimes[k]; });
+}
+function stampAct(url){ if(!url) return; actTimes[url]=Date.now(); pruneActTimes(); saveActTimes(); }
+function actTime(url){ return (+actTimes[url]) || 0; }
 
 // ── v36.5: WHEN THE LAST SHEET READ HAPPENED ─────────────────────────────
 // effStatus needs to know whether the `status` on a card is OLDER or NEWER
@@ -701,6 +741,14 @@ function renderedAt(s){
 // unmistakable even when several land at once.
 const NEW_WINDOW_MS = 2*60*60*1000;
 function isNew(s){ const t=renderedAt(s); return t>0 && (Date.now()-t) < NEW_WINDOW_MS; }
+// v36.7: on Deployed / On Hold / Skipped, "new" means YOU JUST ACTED on it — the
+// thumbnail may have been rendered days ago and is irrelevant there. Discovery is
+// unchanged: there, new genuinely means freshly rendered art.
+function isNewInView(s){
+  if(activeView==='discovery') return isNew(s);
+  const t=actTime(s && s.source_url);
+  return t>0 && (Date.now()-t) < NEW_WINDOW_MS;
+}
 
 const initials = name => (name||'?').replace(/[^A-Za-z ]/g,'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 
@@ -719,8 +767,15 @@ function render(){
   //   thumbs/<row>-<ts>.png               Gen Thumbs (older)
   //   thumbs/new-<ts>-<rand>.png          Collect & Score
   // so we take the largest 13-digit epoch in the filename. Newest render first.
+  //
+  // ── v36.7: SORT THE ACTION VIEWS BY WHEN YOU ACTED ──────────────────────
+  // Deployed / On Hold / Skipped used to sort by date_added — the DISCOVERY date —
+  // so deploying a week-old find buried it a week down the list. Sort by your tap
+  // first; anything with no local record (another device, or pre-v36.7) falls
+  // through to the old date_added / row_number order, exactly as before.
+  const at=s=>actTime(s && s.source_url);
   if(activeView==='discovery') list.sort((a,b)=> (renderedAt(b)-renderedAt(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
-  else                         list.sort((a,b)=> (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
+  else                         list.sort((a,b)=> (at(b)-at(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   // bottom-nav active state
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===activeView));
   if(!list.length){
@@ -755,7 +810,7 @@ function card(s){
   const subline=[chName, viewBits.join(' · '), ageStr].filter(Boolean).join(' · ');
 
   el.innerHTML=`
-    <div class="thumb-wrap">${isNew(s)?'<span class="newpill">NEW</span>':''}${thumbInner}${dur?`<span class="dur">${dur}</span>`:''}</div>
+    <div class="thumb-wrap">${isNewInView(s)?'<span class="newpill">NEW</span>':''}${thumbInner}${dur?`<span class="dur">${dur}</span>`:''}</div>
     <div class="statusline"></div>
     <div class="meta">
       <div class="avatar">${initials(chName)}</div>
@@ -837,6 +892,7 @@ async function sendAction(action,story,el){
   el.querySelectorAll('.abtn').forEach(b=>b.disabled=true);
 
   localActs[url]={ a:action, ts:Date.now() }; saveActs();
+  stampAct(url);                               // v36.7: durable ordering key for the action views
   el.dataset.eff = action==='select'?'selected':action;
   el.classList.remove('open');
   render();                                    // move it out of Discovery immediately
@@ -858,6 +914,7 @@ async function sendAction(action,story,el){
     console.error('action failed:',err);
     toast('Deploy failed to reach the pipeline — the card was NOT written');
     delete localActs[url]; saveActs();          // do not fake a success
+    delete actTimes[url]; saveActTimes();       // v36.7: and do not order by a tap that failed
     el.dataset.eff = story.status || 'scored';
     render();
   }finally{
@@ -887,6 +944,7 @@ async function rerollStory(story,el){
     const changed=data&&data.changed;
     // Clear any local action so the rerolled row is free to return to Discovery.
     if(localActs[url]){ delete localActs[url]; saveActs(); }
+    if(actTimes[url]){ delete actTimes[url]; saveActTimes(); }   // v36.7: it is back in Discovery
     activeView='discovery';
     await load();                                     // single repaint, pure read
 
