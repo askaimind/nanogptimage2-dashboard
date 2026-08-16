@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.8';
+    var BUILD = '36.9';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.8">
-<link rel="apple-touch-icon" href="favicon.png?v=36.8">
+<link rel="icon" type="image/png" href="favicon.png?v=36.9">
+<link rel="apple-touch-icon" href="favicon.png?v=36.9">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.8</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.9</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -403,7 +403,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // fall back to exactly the old order, so nothing regresses.
 // Adds no network call, no timer, and starts no work: the v31 rule is untouched.
 //
-// ── v36.8 ADDENDUM — THE SHEET CARRIES IT NOW, SO IT WORKS EVERYWHERE ───────
+// ── v36.9 ADDENDUM — THE SHEET CARRIES IT NOW, SO IT WORKS EVERYWHERE ───────
 // v36.7's ordering was per-device: deploy on the desktop, look on the phone,
 // and that card fell back to the old date_added order. Dashboard Reader v18.27
 // closes it — `Update Status` writes an `Action Date` on every Deploy / Hold /
@@ -468,7 +468,7 @@ function pruneActTimes(){
 function stampAct(url){ if(!url) return; actTimes[url]=Date.now(); pruneActTimes(); saveActTimes(); }
 function actTime(url){ return (+actTimes[url]) || 0; }
 
-// v36.8: THE SHEET NOW CARRIES THE ACTION TIME. Dashboard Reader v18.27's
+// v36.9: THE SHEET NOW CARRIES THE ACTION TIME. Dashboard Reader v18.27's
 // Update Status writes an `Action Date` on every Deploy / Hold / Skip and
 // Format Stories returns it as `action_date`, so ordering finally works on
 // EVERY device instead of only the one you tapped on. The localStorage map
@@ -768,7 +768,7 @@ function isNew(s){ const t=renderedAt(s); return t>0 && (Date.now()-t) < NEW_WIN
 // unchanged: there, new genuinely means freshly rendered art.
 function isNewInView(s){
   if(activeView==='discovery') return isNew(s);
-  const t=actTimeOf(s);                      // v36.8: sheet first, local record as fallback
+  const t=actTimeOf(s);                      // v36.9: sheet first, local record as fallback
   return t>0 && (Date.now()-t) < NEW_WINDOW_MS;
 }
 
@@ -795,7 +795,7 @@ function render(){
   // so deploying a week-old find buried it a week down the list. Sort by your tap
   // first; anything with no local record (another device, or pre-v36.7) falls
   // through to the old date_added / row_number order, exactly as before.
-  const at=s=>actTimeOf(s);                  // v36.8: sheet `action_date` first, local record as fallback
+  const at=s=>actTimeOf(s);                  // v36.9: sheet `action_date` first, local record as fallback
   if(activeView==='discovery') list.sort((a,b)=> (renderedAt(b)-renderedAt(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   else                         list.sort((a,b)=> (at(b)-at(a)) || (ts(b)-ts(a)) || ((+b.row_number||0)-(+a.row_number||0)) );
   // bottom-nav active state
@@ -1145,9 +1145,24 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 // chain immediately. v34: used by BOTH the Gen Thumbs button and the circle
 // arrow's phase B — the ONLY render driver in the whole system. See the v33/v34
 // addenda in the banner at the top of this script.
+// v36.9: re-read until the new thumbnails are actually visible, or say so honestly.
+// Pure reads only (?poll=1), a fixed number of them, no retry of any work, no timer
+// driving it, dies with the tab. Same bounded shape as the v36.6 reroll grace looks.
+async function loadUntilThumbsLand(before, expectGain){
+  const countThumbs = () => allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
+  await load();
+  if(countThumbs() - before >= expectGain) return true;
+  for(const waitMs of [4000, 6000]){
+    await new Promise(r => setTimeout(r, waitMs));
+    await load();
+    if(countThumbs() - before >= expectGain) return true;
+  }
+  return false;
+}
 let genBusy=false;
 async function runRenderChain(expected){
   expected=Number(expected||0);      // flags just written by phase A (0 = manual press, no settle needed)
+  const thumbsBefore = allStories.filter(s=>(s.thumbnail_url||'').trim()).length;
   const btn=document.getElementById('genthumb-btn');
   const original='Gen Thumbs';
   genBusy=true;
@@ -1210,7 +1225,11 @@ async function runRenderChain(expected){
     return {done, err};
   }
   if(done>0){
-    await load();                                     // single repaint, pure read
+    // v36.9: SETTLE GRACE ON THE FINAL REPAINT. The row IS written by the time we
+    // get here, but Sheets can still serve the previous value to an immediate read,
+    // so the repaint painted the OLD feed and the new cards only showed up when you
+    // refreshed by hand. Bounded exactly like the v36.6 reroll fix.
+    const landed = await loadUntilThumbsLand(thumbsBefore, done);
     // Cap exit: the per-press backstop (GEN_HARD_CAP) stopped the chain with rows
     // still flagged — say so instead of claiming completion. One more Gen Thumbs
     // press resumes exactly where this one stopped.
@@ -1220,6 +1239,7 @@ async function runRenderChain(expected){
       : short
         ? `${done} of ${expected} rendered — the rest keep their ADD flag. Press Gen Thumbs to finish.`
         : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
+    if(!landed) toast(`${done} rendered ✓ — the new cards are still landing. Re-tap the Discovery tab in a few seconds to reload.`);
     btn.textContent = (lastRemaining>0 || short) ? original : 'Done ✓';
     setTimeout(()=>{ if(btn.textContent==='Done ✓') btn.textContent=original; },2500);
   }else{
