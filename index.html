@@ -7,7 +7,7 @@
   // reload ONCE with ?v=BUILD so the browser pulls the new file. The sessionStorage
   // guard stops this from looping. Result: visitors always land on current code.
   (function(){
-    var BUILD = '36.9';
+    var BUILD = '36.10';
     try {
       var url = new URL(window.location.href);
       var v = url.searchParams.get('v');
@@ -26,8 +26,8 @@
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.9">
-<link rel="apple-touch-icon" href="favicon.png?v=36.9">
+<link rel="icon" type="image/png" href="favicon.png?v=36.10">
+<link rel="apple-touch-icon" href="favicon.png?v=36.10">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,7 +199,7 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.9</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.10</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
@@ -416,6 +416,23 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // REQUIRES the one-time header: Discovery tab, cell AK1 = `Action Date`.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── v36.10 ADDENDUM — A GATE STOPPING A CARD IS NOT THE END OF THE CHAIN ───
+// Symptom (2026-08-19): two rows were flagged ADD, Gen Thumbs was pressed, the
+// first row was parked by the new Duplicate Gate, and the chain stopped dead
+// with the second row untouched.
+// Cause: the chain broke on `submitted === 0` alone. Before any gate existed
+// that reading was sound — zero submitted could only mean zero ADD rows. Now a
+// press can legitimately do work and submit nothing: Dashboard Reader v18.28's
+// fact gate and v18.34's Duplicate Gate both park a row, clear its flag, and
+// answer { submitted: 0, remaining: N }. That is a card handled, not an empty
+// queue, and `remaining` was already telling us so.
+// Fix: break only when submitted AND remaining are both zero. Parked rows are
+// counted separately, reported honestly in the toasts, and returned to the
+// caller so the "nothing to render" message is not printed over real work.
+// Still bounded exactly as before: GEN_HARD_CAP, no retries, dies with the tab.
+// New guard: if `remaining` does not go DOWN between two zero-submitted answers,
+// the row's flag did not clear, so asking again would ask the same question. The
+// chain stops and says so rather than burning the cap on a stuck row.
 const READ_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-read';
 // The ONLY URL this page reads from. ?poll=1 = pure read, zero side effects.
 const POLL_URL = READ_URL + '?poll=1';
@@ -656,7 +673,7 @@ async function refreshTap(){
   }
   toast(`${flagged} stor${flagged===1?'y':'ies'} flagged — rendering them one at a time…`);
   const r=await runRenderChain(flagged);     // arrow keeps spinning through phase B
-  if(!r.err && r.done===0){
+  if(!r.err && r.done===0 && !r.parked){
     // The flags landed but the render read didn't see them yet.
     toast('Flagged rows were not visible yet — press Gen Thumbs in a minute to render them');
   }
@@ -1089,7 +1106,7 @@ async function submitBackfill(){
   }
   toast(`${flagged} stor${flagged===1?'y':'ies'} created — rendering them one at a time…`);
   const r=await runRenderChain(flagged);              // same chain as Gen Thumbs + circle arrow
-  if(!r.err && r.done===0){
+  if(!r.err && r.done===0 && !r.parked){
     toast('Created rows were not visible yet — press Gen Thumbs in a minute to render them');
   }
   bfBusy=false;
@@ -1168,8 +1185,9 @@ async function runRenderChain(expected){
   genBusy=true;
   btn.disabled=true; btn.classList.add('rendering');
   let done=0;                                         // rows confirmed rendered+written
-  let total=0;                                        // done + remaining, learned from the first response
-  const stopClock=startClock(btn, ()=> total>0 ? `Rendering ${Math.min(done+1,total)}/${total}` : 'Rendering…');
+  let parked=0;                                       // v36.10: rows a gate stopped (no art, no spend)
+  let total=0;                                        // done + parked + remaining, learned as we go
+  const stopClock=startClock(btn, ()=> total>0 ? `Rendering ${Math.min(done+parked+1,total)}/${total}` : 'Rendering…');
   // Safety backstop only. The real bound is the server's `remaining` count, which
   // can never exceed the rows marked ADD. This cap just guarantees the chain is
   // finite even if a future workflow bug reported `remaining` wrong forever.
@@ -1180,6 +1198,7 @@ async function runRenderChain(expected){
   // Settle Sheet Write pauses 6s before the read (the v18.5 propagation fix).
   let settleNext = expected>0;
   let graceUsed=false;                                // one follow-up look, max
+  let prevRemaining=-1;                               // v36.10: stuck-flag guard
   try{
     for(let i=0;i<GEN_HARD_CAP;i++){
       const body={action:'gen_thumbs'};
@@ -1189,23 +1208,43 @@ async function runRenderChain(expected){
       const data=await res.json().catch(()=>({}));
       const n=(data&&typeof data.submitted==='number')?data.submitted:0;
       const remaining=(data&&typeof data.remaining==='number')?data.remaining:0;
-      if(n===0){ lastRemaining=0; break; }            // nothing (left) marked ADD
+      if(n===0){
+        // v36.10: submitted 0 with rows still remaining means a GATE handled this
+        // one — the fact gate or the Duplicate Gate parked it, cleared its flag,
+        // and spent nothing on art. Keep going: the next row is a different row.
+        if(remaining>0){
+          if(remaining===prevRemaining){
+            // The flag did not clear, so the next request would ask the same
+            // question and get the same answer. Stop and say so.
+            lastRemaining=remaining;
+            break;
+          }
+          prevRemaining=remaining;
+          parked++;
+          total=Math.max(done+parked+remaining, expected);
+          lastRemaining=remaining;
+          toast(`${parked} card${parked===1?'':'s'} stopped by a gate — moving on, ${remaining} left…`);
+          continue;
+        }
+        lastRemaining=0; break;                       // nothing left marked ADD
+      }
+      prevRemaining=-1;
       done+=n;
-      total=Math.max(done+remaining, expected);
+      total=Math.max(done+parked+remaining, expected);
       lastRemaining=remaining;
       if(remaining<=0){
         // Server sees no more ADD rows. If phase A said there should be more,
         // give the sheet one settled second look before believing it — a
         // single bounded follow-up request, not a retry of anything.
-        if(expected>done && !graceUsed){
+        if(expected>done+parked && !graceUsed){
           graceUsed=true; settleNext=true;
-          toast(`${done} rendered — double-checking for ${expected-done} more that may not be visible yet…`);
+          toast(`${done} rendered — double-checking for ${expected-done-parked} more that may not be visible yet…`);
           await new Promise(r=>setTimeout(r,5000));
           continue;
         }
         break;                                        // last row written — chain stops dead
       }
-      toast(`${done} of ${total} rendered — next one starting…`);
+      toast(`${done} of ${total} rendered${parked?`, ${parked} stopped by a gate`:''} — next one starting…`);
     }
   }catch(e){
     console.error('render chain stopped:',e);
@@ -1222,8 +1261,9 @@ async function runRenderChain(expected){
     toast(done>0
       ? `Lost the connection after ${done} — in a minute, press Gen Thumbs to finish the rest`
       : 'Lost the connection — the render may still be finishing. Re-tap the Discovery tab in a minute to reload.');
-    return {done, err};
+    return {done, parked, err};
   }
+  const gateNote = parked ? ` ${parked} card${parked===1?' was':'s were'} stopped by a gate, check the Discovery tab for the reason.` : '';
   if(done>0){
     // v36.9: SETTLE GRACE ON THE FINAL REPAINT. The row IS written by the time we
     // get here, but Sheets can still serve the previous value to an immediate read,
@@ -1233,25 +1273,27 @@ async function runRenderChain(expected){
     // Cap exit: the per-press backstop (GEN_HARD_CAP) stopped the chain with rows
     // still flagged — say so instead of claiming completion. One more Gen Thumbs
     // press resumes exactly where this one stopped.
-    const short = (expected>done && lastRemaining<=0);
-    toast(lastRemaining>0
+    const short = (expected>done+parked && lastRemaining<=0);
+    toast((lastRemaining>0
       ? `${done} rendered — ${lastRemaining} still flagged. Press Gen Thumbs to continue.`
       : short
         ? `${done} of ${expected} rendered — the rest keep their ADD flag. Press Gen Thumbs to finish.`
-        : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`);
+        : `Done ✓ — ${done} thumbnail${done===1?'':'s'} rendered`) + gateNote);
     if(!landed) toast(`${done} rendered ✓ — the new cards are still landing. Re-tap the Discovery tab in a few seconds to reload.`);
     btn.textContent = (lastRemaining>0 || short) ? original : 'Done ✓';
     setTimeout(()=>{ if(btn.textContent==='Done ✓') btn.textContent=original; },2500);
   }else{
     btn.textContent=original;
+    // v36.10: a press that parked rows and rendered none still DID something.
+    if(parked) toast(`Nothing rendered.${gateNote}`);
   }
-  return {done, err:null};
+  return {done, parked, err:null};
 }
 async function generateThumbnails(){
   if(genBusy||discoverBusy||bfBusy) return;           // a second tap does nothing
   toast('Rendering — about a minute per story. Leave the page open.');
   const r=await runRenderChain();
-  if(!r.err && r.done===0) toast('No rows marked ADD — nothing to render');
+  if(!r.err && r.done===0 && !r.parked) toast('No rows marked ADD — nothing to render');
 }
 
 // bottom nav + source toggles
