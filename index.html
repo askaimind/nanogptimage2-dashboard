@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<!-- saved from url=(0060)https://askaimind.github.io/nanogptimage2-dashboard/?v=36.10 -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <script>
   // ---- Auto cache-bust: forces a fresh fetch after every deploy without manual ?v= ----
   // Bump BUILD whenever index.html changes. On load, if the URL's ?v= doesn't match,
@@ -20,14 +20,14 @@
     } catch(e) { /* if URL API unavailable, fail open - page still works */ }
   })();
   </script>
-<meta charset="UTF-8">
+
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>NanoRunway · Discovery</title>
-<link rel="icon" type="image/png" href="favicon.png?v=36.10">
-<link rel="apple-touch-icon" href="favicon.png?v=36.10">
+<link rel="icon" type="image/png" href="https://askaimind.github.io/nanogptimage2-dashboard/favicon.png?v=36.10">
+<link rel="apple-touch-icon" href="https://askaimind.github.io/nanogptimage2-dashboard/favicon.png?v=36.10">
 <style>
 /* ---------- YouTube-mobile faithful reproduction ----------
    Goal: judge stories in the exact visual context they'll compete in.
@@ -199,41 +199,459 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 <body>
 
 <div class="appbar">
-  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.10</span></div>
+  <div class="yt-logo"><span class="yt-mark"></span>Discovery<span style="font-size:10px;color:var(--text-dim);font-weight:400;margin-left:4px;">v36.11</span></div>
   <button class="refresh-btn" id="refresh-btn" title="Find new stories AND render their thumbnails — one full cycle per press. To just reload the feed, re-tap the Discovery tab." onclick="refreshTap()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
   </button>
   <button class="genthumb-btn" id="genthumb-btn" title="Renders every row marked ADD, one at a time, and stops the moment the last one is written." onclick="generateThumbnails()">Gen Thumbs</button>
-  <button class="genthumb-btn" id="backfill-btn" title="Create new stories per channel and render their thumbnails, one at a time, until they're done" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
+  <button class="genthumb-btn" id="backfill-btn" title="Create new stories per channel and render their thumbnails, one at a time, until they&#39;re done" onclick="openBackfill()" style="margin-left:6px;">Backfill</button>
   <div class="src-toggles">
-    <label><input type="checkbox" class="src" value="reddit" checked>Reddit</label>
-    <label><input type="checkbox" class="src" value="youtube" checked>YouTube</label>
-    <label><input type="checkbox" class="src" value="news" checked>News</label>
+    <label><input type="checkbox" class="src" value="reddit" checked="">Reddit</label>
+    <label><input type="checkbox" class="src" value="youtube" checked="">YouTube</label>
+    <label><input type="checkbox" class="src" value="news" checked="">News</label>
   </div>
 </div>
 
-<div class="chips" id="chips"></div>
+<div class="chips" id="chips"><button class="chip active">All</button><button class="chip">Night Feed</button><button class="chip">True Crime</button><button class="chip">History</button><button class="chip">Science</button><button class="chip">Psychology</button><button class="chip">Horror</button><button class="chip">Survival</button><button class="chip">Technology</button><button class="chip">Philosophy</button><button class="chip">Travel</button><button class="chip">Pug Zillions</button></div>
 
-<div class="feed" id="feed">
-  <div class="loading"><div class="spinner"></div>Loading stories…</div>
-</div>
+<div class="feed" id="feed"><div class="card" data-eff="selected" data-url="https://www.ecmweb.com/lighting-control/article/20899475/lightbulb-cartel-a-dark-spot-in-lighting-history">
+    <div class="thumb-wrap"><span class="newpill">NEW</span><img src="./NanoRunway · Discovery_files/940-1787099616199.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;FINED FOR LASTING TOO LONG&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">They Were Fined Every Time a Bulb Lasted Too Long</div>
+        <div class="vid-sub">History · 11 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">backfill</span>
+      <span class="badge">reversal</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">FINED FOR LASTING TOO LONG</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">In 1924, every major lightbulb manufacturer on earth secretly agreed to engineer their bulbs to fail in half the time they were already lasting, then fined any member company whose bulbs lasted too long.</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">In December 1924, representatives from General Electric, Osram, Philips, and other major manufacturers met in Geneva and formed the Phoebus cartel, capping bulb life at 1,000 hours. Bulbs at the time were lasting 2,500 hours or more.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">Every major lightbulb company on earth held a secret meeting, signed a contract to make their bulbs worse on purpose, and then fined each other if their bulbs accidentally lasted too long. The documents survived.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.britannica.com/today-in-history/February-5-The-Disappearance-of-George-Bass">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/964-1787197143923.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;VENUS VANISHED&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">He Charted Australia's Coast. Then His Ship Disappeared.</div>
+        <div class="vid-sub">History · 10 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">backfill</span>
+      <span class="badge">verdict</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">VENUS VANISHED</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">George Bass helped chart Australia's coast, discovered Bass Strait, and then sailed out of Sydney in 1803 with a crew of 25 and was never heard from again.</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">Royal Navy surgeon George Bass arrived in Australia in 1795, explored the coast alongside Matthew Flinders, and proved Tasmania was a separate island, giving his name to the strait between them. In 1803 he sailed the Venus out of Port Jackson toward Tahiti and South America with 25 crew. Neither the ship nor any man aboard was ever seen again.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">He named a stretch of ocean that still carries his name, then disappeared into the sea that immortalized him, and nobody has ever explained what happened.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://news.google.com/rss/articles/CBMiqwFBVV95cUxOMFNhS1FqTGhnMDg0dFJ4VFJtWmQ3OG5GRi1idGplemZQcTBUd2NoNkgxYXJhMERJUkQwODQyTTA2bmJDWjg1Rkkyakp3YTlicDFBU2NqeklmTm1TTjg0LUhyR0VuQXN0Z3JTT2x4ZXRXZWNWZ3plWGFMOXBxVkFSd05oQUVSNlFaX21OVE1rcGJvX3ZQcUg5YUJ0X3U3b0F0YTlSWWRKZUZjVHfSAbABQVVfeXFMUGQ3ZWZ3VS1palBLc3NLbFVzQ1Q1MjUzekRyUmdMZGk4cVJEMnFzVzBobE1sNEFJcHFISWxJNll5Z2pPWS1MRXI2WEhoUFRkY0NRdjhRYzVnRjNaSENkeVFiQm9YNG5Gdk13U2ttT1lWelFJbjFiNWxWR0NvYWpNLS1yaHNLTEMtYnI0cmRtWTlMR0FDMWxTbDRLaTZLbTBuOGFlc2tXU2stc1QyQTB0cmI?oc=5">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/955-1787193855853.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;FACE-DOWN. 2,500 YEARS.&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">The 2,500-Year-Old Face Found Under a Street in Revelation's City</div>
+        <div class="vid-sub">History · 10 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 8.2</span>
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">News</span>
+      <span class="badge">number_wound</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">FACE-DOWN. 2,500 YEARS.</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">A mysterious face carved into the bedrock of an ancient city mentioned in the Book of Revelation was hidden in plain sight until modern archaeology exposed it, raising questions about who left it and why.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">Archaeologists just found a face carved into stone that was invisible for nearly two thousand years. What it reveals about the city of Patmos changes everything.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">Close-up of aged stone or parchment surface with a faint human face emerging from shadow and texture, half-obscured by centuries of wear, lit from the side to reveal carved or drawn features that would be invisible under flat lighting.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">The face was discovered during excavation in Patmos, Greece, the island where tradition holds John wrote Revelation. Archaeologists believe it dates to the early Christian period and may represent either a religious figure, a local dignitary, or a pilgrimage marker left by believers.</div></div>
+    
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.history.com/articles/radium-girls-workplace-safety">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/938-1787016519129.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;THEY BLAMED SYPHILIS.&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">They Were Dying. Their Boss Said It Was Syphilis.</div>
+        <div class="vid-sub">History · 12 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">backfill</span>
+      <span class="badge">reversal</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">THEY BLAMED SYPHILIS.</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">A corporation knowingly poisoned its own female workers with radioactive paint, suppressed two separate medical investigations proving it, and then publicly blamed the dying women for having syphilis.</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">Young women at U.S. radium dial factories were instructed to sharpen their brushes with their lips, ingesting radium daily. The company had medical evidence of poisoning as early as 1925 and withheld it.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">They glowed in the dark after every shift, their bosses knew it was killing them, and the company's response was to tell the world the women had syphilis.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.history.navy.mil/our-collections/photography/wars-and-events/spanish-american-war/sinking-of-uss-maine.html">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/941-1787099725499.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;HEARST&#39;S $50,000 REWARD&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">The Explosion That Started a War Over a Disputed Cause</div>
+        <div class="vid-sub">History · 11 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">backfill</span>
+      <span class="badge">reversal</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">HEARST'S $50,000 REWARD</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">When a U.S. warship exploded in Havana harbor in 1898 and no cause was established, newspaper publisher William Randolph Hearst's sensationalist images and headlines blamed Spain and pushed America into a war within months.</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">On the night of February 15, 1898, the USS Maine exploded in Havana Harbor, killing approximately 260 crew members. The cause was not immediately determined and remains unsettled to this day.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">A ship exploded, nobody knew why, and one newspaper publisher decided to blame a foreign country with banner headlines and inflammatory illustrations. Within months, America was at war. The cause of the explosion is still officially unsettled.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=nDwdq2sqbJ0">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/889-1786504156602.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;WITNESSES. NO ANSWERS.&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">The Congressman Who Named the Fed and Died at Dinner</div>
+        <div class="vid-sub">History · 18 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 8.7</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">WITNESSES. NO ANSWERS.</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">A sitting U.S. Congressman spent years naming names on the House floor, survived two known attempts on his life, and then died at a dinner party in a city full of witnesses, and the cause of death was never officially confirmed.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">He stood in Congress and accused the Federal Reserve of deliberately destroying the American economy, then someone tried to shoot him, someone tried to poison him, and the third attempt had no witnesses willing to explain what happened. The case was closed before it was opened.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A lone man in a 1930s dark suit seated at a formally set banquet table, head slightly bowed, a champagne glass tipped with liquid catching a single overhead light mid-fall against a pitch-black background, rendered in high-contrast noir style with his face turned just out of frame.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">McFadden collapsed at a political banquet in New York in October 1936 and was dead within days; the official cause listed was heart failure, but his personal physician and several contemporaries disputed the finding and no thorough investigation was opened.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fear that history's most iconic disasters were not accidents but engineered eliminations of inconvenient people by those consolidating power.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=HfSYoIFchgE">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/903-1786325392262.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;SAME SILHOUETTE&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">Divers at Estonia's Drowned Prison Keep Reporting the Same Figure</div>
+        <div class="vid-sub">Night Feed · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 89.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">SAME SILHOUETTE</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">A flooded Estonian prison where thousands of forced laborers died was submerged and sealed underwater, and the divers who go inside keep reporting the same thing, without ever having spoken to each other.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">A Soviet prison was flooded to erase what happened inside. Now divers keep coming out saying the exact same thing, and not one of them knew the others had been there.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">An AI-generated diver in a Soviet-era flooded cell corridor, torch beam cutting through murky green water illuminating a rusted iron cell door still hanging half-open, the diver's body language frozen mid-kick as if stopped by something just beyond the frame, shot from behind at a low angle so the darkness ahead swallows the light.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">Independent dive logs from multiple unconnected expeditions spanning 2011 to 2023 document the same sequence inside Rummu's submerged cell blocks: equipment malfunction at the same corridor junction, acute panic with no hypoxia marker present, and a reported visual of a stationary human silhouette in a cell that no diver has been able to attribute to reflect…</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fear that places of mass suffering absorb darkness that outlasts their walls — and that the state-sanctioned cruelty inside prisons creates hauntings too powerful to be dismissed as folklore.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.reddit.com/r/Thetruthishere/comments/1v5pzxy/i_heard_a_strange_howl_in_the_irish_boglands/">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/908-1786411825123.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;IT FOUND ME&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">The Night Something Tracked Me and I Still Can't Explain It</div>
+        <div class="vid-sub">Night Feed · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 42.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">Reddit</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">IT FOUND ME</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">Weaponizes the primal fear of being hunted by an unknown force, making the viewer need to know what 'it' is and why the narrator is the target.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">During the Covid-19 Pandemic, I was living in a small village in the Irish countryside. This village was called Walsh Island, which acquired its name due to being surrounded by nothing but bogland – in fact, this was the largest area of raised bogland in the country.</div></div>
+    
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=b_-24w86nmk">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/924-1786234954758.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;DO NOT SEND ANYONE&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">The Warden Who Erased a Ravine From Every BC Map</div>
+        <div class="vid-sub">Night Feed · 27 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 71.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">DO NOT SEND ANYONE</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">He walked every inch of Tweedsmuir for eleven years without incident, but his final six weeks of patrol logs describe a single unnamed ravine in terms that no wilderness training manual has a category for, and he never explained what he found there.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">He described the same stretch of forest six weeks in a row and each entry got shorter. The last one was four words. No one has published what those four words were.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A weathered paper logbook lying open on a rough wooden desk inside a dim ranger station, the visible page filled with dense handwriting that becomes progressively more cramped and erratic toward the bottom, the final lines trailing off mid-sentence. A single oil lantern throws orange light from frame-left. Outside the small window behind the desk, a wall of dark dense forest fills the entire frame with no sky visible. No person present. Camera angle is slightly overhead and close on the book.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">The transfer was approved without a formal review, and the warden's logs were filed in a provincial archive where they sat unread for decades. When a Canadian wilderness historian located them in 2011, the final entry read only: 'Do not send anyone.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fear that authority figures sent to protect us can themselves be swallowed by something in the wilderness that has no name and leaves no clear evidence.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=gXoVtzkg7ys">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/914-1786411891216.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;THEY HID HER&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">The Church Verified This Possession in 1906, Then Said Nothing</div>
+        <div class="vid-sub">Night Feed · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 72.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">reversal</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">THEY HID HER</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">Every famous exorcism story comes from America or Europe, but in 1906, over 100 nuns, priests, and schoolgirls signed sworn statements about something they watched happen in a South African mission school, and the Church formally accepted it as genuine, yet almost no one in the West has ever been told it existed.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">Over 100 sworn witnesses. A formal Church investigation. A verdict that was never overturned. So why has no one ever told you this name?</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A dimly lit colonial-era stone mission dormitory at night, single oil lamp casting harsh upward shadows on a wooden bed frame, on the bed, the silhouette of a rigid levitating figure, hands clasped unnaturally, face obscured in darkness. The room is framed as if viewed from the doorway by an unseen witness, creating a voyeuristic dread. Sepia-toned with a single cold blue light source from an unseen window suggesting moonlight.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">The Church's formal inquiry concluded Clara Germana Cele's case met every canonical criterion for genuine demonic possession and approved the exorcism as valid, a ruling that was never reversed.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fear that demonic possession is real, documented, and could happen to ordinary people — and that institutions like the Church confirmed it.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.reddit.com/r/Thetruthishere/comments/1v9b1nl/unsettling_work_shift/">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/909-1786325460215.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;IT FOUND ME&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">The Night Something Found Me and I Still Can't Explain It</div>
+        <div class="vid-sub">Night Feed · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 40.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">Reddit</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">IT FOUND ME</div></div>
+    
+    
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">Weaponizes the viewer's primal fear of being hunted by an unknown force, making 'what found who' unbearable to leave unanswered.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">So, let me start this off by saying this is the first time ive ever spoke about this experience publicly. Ive only shared this experience with My girlfriend and maybe a few other people I trust. Obviously since none of you actually know me, I feel this is the place I can get some answers, or anyone give me any insight on what i experienced.</div></div>
+    
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=RZrmX2NGA-0">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/895-1786313841141.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;HE WALKED AWAY.&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">H</div>
+      <div class="meta-text">
+        <div class="vid-title">Rome's Most Powerful Man Quit, and His Reason Ended the Empire</div>
+        <div class="vid-sub">History · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 89.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">reversal</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">HE WALKED AWAY.</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">He controlled every army, every treasury, and every court in the Western world, and the moment he could stop, he did, and when they came begging him to come back, his answer was so calm it broke his successors.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">He had every army, every throne, and every enemy's fear. Then he walked away. When Rome collapsed without him and sent diplomats begging him to return, his reply ended the conversation permanently.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A lone aging man in simple robes seen from behind, standing in a sunlit stone garden courtyard with vegetables growing in neat rows, while in the blurred distance a crowd of armored emissaries waits at a heavy gate, warm golden-hour light on the garden, cold blue shadow on the soldiers, the man not turning around.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">Diocletian refused every plea to return, reportedly telling the envoys that if they could see the cabbages he had grown with his own hands, they would never ask again. He lived out his remaining years in his Dalmatian palace, watching the empire fracture under four successor emperors fighting each other.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fantasy of being the most powerful person in the room and choosing to opt out of obligation entirely — power without duty, dominance without sacrifice.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.reddit.com/r/UnresolvedMysteries/comments/1v8kn3s/in_the_summer_of_1933_10yearold_walter_robinson/">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/928-1785721831085.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;THE BOARD KNEW&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">The Missing Boy Police Gave Up On, Found by a Ouija Board</div>
+        <div class="vid-sub">Night Feed · 27 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 7.8</span>
+      <span class="badge gate-pass">GATE PASS</span>
+      <span class="badge">Reddit</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">THE BOARD KNEW</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">A boy disappeared in 1933, police found nothing, and every real clue that emerged came from a Ouija Board used by his grieving family.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">A 10-year-old vanished in 1933 and the only lead that kept panning out came from a Ouija Board. How do you explain that?</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A dimly lit 1930s parlor at night, a Ouija Board centered on a wooden table, the planchette resting on the letter Y, a single candle casting long shadows across the board, an empty child-sized chair just visible at the table's edge, no people in frame.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">Walter Robinson was never found. The Ouija-directed search party traced a credible path across four states, collecting witness accounts at nearly every stop the board predicted, but the trail ended cold in Alpha, Illinois.</div></div>
+    
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div><div class="card" data-eff="selected" data-url="https://www.youtube.com/watch?v=8r0vkjFXUN0">
+    <div class="thumb-wrap"><img src="./NanoRunway · Discovery_files/913-1785714831100.jpg" alt="" loading="lazy" onerror="this.parentNode.innerHTML=&#39;&lt;div class=&quot;thumb-fallback&quot;&gt;THEY ALL SIGNED&lt;/div&gt;&#39;"></div>
+    <div class="statusline"></div>
+    <div class="meta">
+      <div class="avatar">NF</div>
+      <div class="meta-text">
+        <div class="vid-title">Vermont's 1847 Oath of Silence and the 3 Men Who Vanished After</div>
+        <div class="vid-sub">Night Feed · 28 days ago</div>
+      </div>
+      <div class="kebab">⋮</div>
+    </div>
+    <div class="detail">
+    <div class="d-row">
+      <span class="badge score">★ 77.0</span>
+      <span class="badge gate-fail">GATE FAIL</span>
+      <span class="badge">YouTube</span>
+      <span class="badge">dread_loop</span>
+      <button class="reroll-btn" data-act="reroll" title="Re-read: fix category, regenerate thumbnail &amp; headline">⟳ Reroll</button>
+    </div>
+    <div class="d-block"><div class="d-label">Headline</div><div class="d-val ">THEY ALL SIGNED</div></div>
+    <div class="d-block"><div class="d-label">Elevator Pitch</div><div class="d-val pitch">In 1847, every elected official in a Vermont township signed a written oath of silence after road workers broke through the floor of the oldest meeting house in the county, and the document they signed is still sitting in a state archive no one has formally reviewed.</div></div>
+    <div class="d-block"><div class="d-label">Caption</div><div class="d-val ">Seven elected officials. One written oath. Whatever they found under that meeting house in 1847, it was real enough that they put it in writing, and terrifying enough that no one touched that document for 175 years.</div></div>
+    <div class="d-block"><div class="d-label">Thumbnail Concept</div><div class="d-val ">A single aged parchment document lying open on a stone floor in near-darkness, lit only by one narrow shaft of cold light from above, with seven distinct wax seals and signatures visible at the bottom, the camera angle looking down from slightly above as if the viewer is standing at the edge of a hole, the document's edges yellowed and one corner stained a deep brown.</div></div>
+    <div class="d-block"><div class="d-label">What Really Happened</div><div class="d-val ">The archive review confirms the covenant is genuine, witnessed, and legally formatted, not a rumor. Cross-referencing the town's road maintenance ledger against burial records reveals an unexplained gap: three workers listed on the repair crew vanish from the town census entirely within eight months of the job.</div></div>
+    <div class="d-block"><div class="d-label">Audience Hook</div><div class="d-val ">The fear that institutions built on moral authority actively bury evidence that would destroy their legitimacy, and that entire communities conspire in silence to protect that lie.</div></div>
+    <div class="actions">
+      <button class="abtn abtn-deploy" data-act="select">Deploy</button>
+      <button class="abtn abtn-hold" data-act="hold">Hold</button>
+      <button class="abtn abtn-skip" data-act="skip">Skip</button>
+    </div>
+  </div></div></div>
 
 <nav class="botnav" id="botnav">
-  <button class="tab active" data-view="discovery">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+  <button class="tab" data-view="discovery">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
     Discovery</button>
-  <button class="tab" data-view="deployed">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 22 20H2z"/></svg>
+  <button class="tab active" data-view="deployed">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 22 20H2z"></path></svg>
     Deployed</button>
   <button class="tab" data-view="hold">
-    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
     On Hold</button>
   <button class="tab" data-view="skip">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6 18 18M18 6 6 18"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6 18 18M18 6 6 18"></path></svg>
     Skipped</button>
 </nav>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast">Deployed ✓ — check n8n Executions for the script run</div>
 
 <!-- Backfill modal: pick channels + counts, request in one go -->
 <div class="bf-overlay" id="bf-overlay" onclick="if(event.target===this)closeBackfill()">
@@ -416,6 +834,17 @@ body{max-width:480px;margin:0 auto;padding-bottom:64px;overflow-x:hidden;}
 // REQUIRES the one-time header: Discovery tab, cell AK1 = `Action Date`.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── v36.11 ADDENDUM — PUG ZILLIONS ─────────────────────────────────────────
+// A new channel has to be named in four places in this file, and none of them
+// error when it is missing — the channel simply is not there. CATS (filter chips
+// AND the Backfill sheet, which derives BF_CHANNELS from it), the static chips
+// row in the markup, CAT_MATCH (chip label -> substring of the full Channel
+// Category), and shortCat (full category -> chip label, used in toasts).
+// The canonical category string is 'Finance & Money'. CAT_MATCH deliberately
+// holds the bare word 'Finance' so catMatch()'s .includes() test still matches,
+// and Backfill v24's LABEL_TO_CANON resolves 'Finance' back to the full string.
+// Pairs with Collect and Score v19.9 and Backfill v24.
+
 // ── v36.10 ADDENDUM — A GATE STOPPING A CARD IS NOT THE END OF THE CHAIN ───
 // Symptom (2026-08-19): two rows were flagged ADD, Gen Thumbs was pressed, the
 // first row was parked by the new Duplicate Gate, and the chain stopped dead
@@ -448,13 +877,19 @@ const START_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-start';
 // nano-dashboard-status chain — reads static data, starts NOTHING, no quota).
 const STATUS_URL = 'https://askai.app.n8n.cloud/webhook/nano-dashboard-status';
 
-// 10 canonical categories (chip labels are short; match against full Channel Category)
-const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel'];
+// 11 canonical categories (chip labels are short; match against full Channel Category)
+// v36.11: Pug Zillions added. CATS drives BOTH the filter chips and BF_CHANNELS,
+// so the Backfill sheet gets its row from this one line.
+const CATS = ['All','Night Feed','True Crime','History','Science','Psychology','Horror','Survival','Technology','Philosophy','Travel','Pug Zillions'];
 // map short chip -> substring to match the full canonical category coming from the sheet
 const CAT_MATCH = {
   'Night Feed':'Mystery & The Unknown', 'True Crime':'True Crime', 'History':'History',
   'Science':'Science', 'Psychology':'Psychology', 'Horror':'Horror & Dark',
-  'Survival':'Survival', 'Technology':'Technology', 'Philosophy':'Philosophy', 'Travel':'Travel'
+  'Survival':'Survival', 'Technology':'Technology', 'Philosophy':'Philosophy', 'Travel':'Travel',
+  // v36.11: the canonical category is 'Finance & Money'. Matching on the bare word
+  // 'Finance' keeps catMatch()'s substring test working and keeps the Backfill
+  // request body sending a string Backfill v24's LABEL_TO_CANON already resolves.
+  'Pug Zillions':'Finance'
 };
 
 let allStories=[];
@@ -1123,6 +1558,7 @@ function shortCat(c){
   if(c.includes('Survival'))return'Survival';
   if(c.includes('Philosophy'))return'Philosophy';
   if(c.includes('Travel'))return'Travel';
+  if(c.includes('Finance')||c.includes('Money'))return'Pug Zillions';   // v36.11
   if(c.includes('History'))return'History';
   return c;
 }
@@ -1306,5 +1742,6 @@ document.querySelectorAll('.src').forEach(c=>c.onchange=render);
 // Initial paint. This is a pure read (?poll=1) — opening the page starts no work.
 load();
 </script>
-</body>
-</html>
+
+
+</body></html>
